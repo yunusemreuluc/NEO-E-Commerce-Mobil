@@ -83,7 +83,7 @@ router.get('/product/:productId', async (req, res) => {
 });
 
 // Yorum ekle
-router.post('/', authenticateToken, reviewValidation, async (req, res) => {
+router.post('/', authenticateToken, reviewValidation, async (req: any, res: any) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {

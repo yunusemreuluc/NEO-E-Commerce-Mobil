@@ -7,6 +7,7 @@ import multer from "multer";
 import path from "path";
 
 import authRouter from "./routes/auth";
+import commentsRouter from "./routes/comments";
 import productsRouter from "./routes/products";
 import reviewsRouter from "./routes/reviews";
 import usersRouter from "./routes/users";
@@ -26,7 +27,9 @@ const port = Number(process.env.PORT || 4000);
 const PUBLIC_BASE_URL =
   process.env.PUBLIC_BASE_URL || `http://localhost:${port}`;
 
-app.use(express.json());
+// Base64 resimler için büyük payload limiti
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(cors({ origin: "*" }));
 
 // uploads klasörü yoksa oluştur (DİKKAT: "uploads" yazıyor)
@@ -63,6 +66,7 @@ app.get("/", (_req, res) => {
 app.use("/auth", authRouter);
 app.use("/products", productsRouter);
 app.use("/reviews", reviewsRouter);
+app.use("/comments", commentsRouter); // Gelişmiş yorum sistemi
 app.use("/users", usersRouter);
 
 app.listen(port, "0.0.0.0", () => {

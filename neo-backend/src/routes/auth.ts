@@ -23,7 +23,7 @@ const registerValidation = [
 ];
 
 // LOGIN
-router.post('/login', loginValidation, async (req, res) => {
+router.post('/login', loginValidation, async (req: any, res: any) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -81,7 +81,7 @@ router.post('/login', loginValidation, async (req, res) => {
 });
 
 // REGISTER
-router.post('/register', registerValidation, async (req, res) => {
+router.post('/register', registerValidation, async (req: any, res: any) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {

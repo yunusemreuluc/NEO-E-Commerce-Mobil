@@ -140,7 +140,7 @@ router.patch('/:userId/status', authenticateToken, requireAdmin, async (req, res
     }
 
     // Kendi hesabını devre dışı bırakmasını engelle
-    if (req.user.userId === userId && !is_active) {
+    if ((req as any).user.userId === userId && !is_active) {
       return res.status(400).json({ message: 'Kendi hesabınızı devre dışı bırakamazsınız' });
     }
 
@@ -172,7 +172,7 @@ router.patch('/:userId/role', authenticateToken, requireAdmin, async (req, res) 
     }
 
     // Kendi rolünü değiştirmesini engelle
-    if (req.user.userId === userId) {
+    if ((req as any).user.userId === userId) {
       return res.status(400).json({ message: 'Kendi rolünüzü değiştiremezsiniz' });
     }
 

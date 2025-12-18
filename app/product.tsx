@@ -1,26 +1,29 @@
 // app/(tabs)/home/product.tsx
 
+import ImageViewModal from "@/components/ImageViewModal";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Alert,
-  Dimensions,
-  Image,
-  Modal,
-  ScrollView,
-  Share,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    Alert,
+    Dimensions,
+    Image,
+    ScrollView,
+    Share,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from "react-native";
-import { addReview, getProductReviews } from "../api";
+import { getTestReviews, testReviewSubmit, testReviewWithImages } from "../api";
+import ImageCommentModal from "../components/ImageCommentModal";
 import { useAuth } from "../contexts/AuthContext";
 import { useCart } from "../contexts/CartContext";
 import { useFavorites } from "../contexts/FavoritesContext";
 import type { Product } from "../types/Product";
+
+// API base URL'i import et
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || "http://10.106.118.212:4000";
 
 export default function ProductScreen() {
   const params = useLocalSearchParams<{
@@ -45,9 +48,13 @@ export default function ProductScreen() {
   const [reviews, setReviews] = useState<any[]>([]);
   const [reviewStats, setReviewStats] = useState({ average_rating: 0, total_reviews: 0 });
   const [showReviewModal, setShowReviewModal] = useState(false);
-  const [reviewText, setReviewText] = useState("");
-  const [reviewRating, setReviewRating] = useState(5);
+
   const [reviewLoading, setReviewLoading] = useState(false);
+  
+  // Resim büyütme modal'ı
+  const [imageViewVisible, setImageViewVisible] = useState(false);
+  const [selectedImages, setSelectedImages] = useState<string[]>([]);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   
   const { user } = useAuth();
 
@@ -121,14 +128,15 @@ export default function ProductScreen() {
     }
   };
 
-  // Yorumları yükle
+  // Yorumları yükle (test endpoint kullan)
   const loadReviews = useCallback(async () => {
     try {
-      const data = await getProductReviews(product.id);
+      const data = await getTestReviews(product.id);
       setReviews(data.reviews || []);
       setReviewStats(data.stats || { average_rating: 0, total_reviews: 0 });
     } catch (error) {
       // Yorumlar yüklenirken hata - sessizce devam et
+      console.error('Yorumlar yüklenirken hata:', error);
     }
   }, [product.id]);
 
@@ -138,28 +146,40 @@ export default function ProductScreen() {
     }
   }, [loadReviews]);
 
-  // Yorum gönder
-  const handleSubmitReview = async () => {
+  // Resimli yorum gönder
+  const handleSubmitReview = async (reviewData: {
+    rating: number;
+    comment: string;
+    images: any[];
+  }) => {
     if (!user) {
       Alert.alert('Giriş Gerekli', 'Yorum yapmak için giriş yapmanız gerekiyor.');
       return;
     }
 
-    if (reviewText.trim().length < 10) {
-      Alert.alert('Hata', 'Yorum en az 10 karakter olmalı.');
-      return;
-    }
-
     setReviewLoading(true);
     try {
-      await addReview(product.id, reviewRating, reviewText.trim());
+      if (reviewData.images.length > 0) {
+        // Base64 ile resimli yorum gönder
+        console.log('Base64 resimli yorum gönderiliyor:', reviewData.images.length, 'resim');
+        await testReviewWithImages(
+          product.id, 
+          reviewData.rating, 
+          reviewData.comment, 
+          reviewData.images
+        );
+      } else {
+        // Resimsiz yorum gönder
+        console.log('Resimsiz yorum gönderiliyor');
+        await testReviewSubmit(product.id, reviewData.rating, reviewData.comment);
+      }
+      
       setShowReviewModal(false);
-      setReviewText("");
-      setReviewRating(5);
-      showToast("Yorumunuz başarıyla eklendi!");
+      showToast("Yorumunuz gönderildi! Moderasyon sonrası yayınlanacak.");
       loadReviews(); // Yorumları yenile
     } catch (error: any) {
       Alert.alert('Hata', error.message || 'Yorum gönderilirken hata oluştu.');
+      throw error; // Modal'ın kendi hata yönetimi için
     } finally {
       setReviewLoading(false);
     }
@@ -239,12 +259,20 @@ export default function ProductScreen() {
             }}
           >
             {productImages.map((imageUrl, index) => (
-              <Image
+              <TouchableOpacity
                 key={index}
-                source={{ uri: imageUrl }}
-                style={styles.image}
-                resizeMode="cover"
-              />
+                onPress={() => {
+                  setSelectedImages(productImages);
+                  setSelectedImageIndex(index);
+                  setImageViewVisible(true);
+                }}
+              >
+                <Image
+                  source={{ uri: imageUrl }}
+                  style={styles.image}
+                  resizeMode="cover"
+                />
+              </TouchableOpacity>
             ))}
           </ScrollView>
           
@@ -321,15 +349,13 @@ export default function ProductScreen() {
                 )}
               </View>
 
-              {user && (
-                <TouchableOpacity
-                  style={styles.addReviewButton}
-                  onPress={() => setShowReviewModal(true)}
-                >
-                  <Ionicons name="add-circle-outline" size={20} color="#FF3B30" />
-                  <Text style={styles.addReviewText}>Değerlendirme Yap</Text>
-                </TouchableOpacity>
-              )}
+              <TouchableOpacity
+                style={styles.addReviewButton}
+                onPress={() => setShowReviewModal(true)}
+              >
+                <Ionicons name="add-circle-outline" size={20} color="#FF3B30" />
+                <Text style={styles.addReviewText}>Değerlendirme Yap</Text>
+              </TouchableOpacity>
 
               {reviews.length > 0 ? (
                 <ScrollView 
@@ -347,6 +373,52 @@ export default function ProductScreen() {
                           </View>
                         </View>
                         <Text style={styles.reviewComment}>{review.comment}</Text>
+                        
+                        {/* Yorum Resimleri */}
+                        {review.images && review.images.length > 0 && (
+                          <ScrollView 
+                            horizontal 
+                            showsHorizontalScrollIndicator={false}
+                            style={styles.reviewImagesContainer}
+                          >
+                            {review.images.map((imageUrl: string, index: number) => {
+                              // URL'yi düzgün oluştur
+                              const fullImageUrl = imageUrl.startsWith('http') 
+                                ? imageUrl 
+                                : `${API_BASE_URL}${imageUrl}`;
+                              
+                              // Resim URL'i hazırlandı
+                              
+                              return (
+                                <TouchableOpacity
+                                  key={index}
+                                  onPress={() => {
+                                    // Resim büyütme modal'ını aç
+                                    const fullUrls = review.images.map((url: string) => 
+                                      url.startsWith('http') ? url : `${API_BASE_URL}${url}`
+                                    );
+                                    setSelectedImages(fullUrls);
+                                    setSelectedImageIndex(index);
+                                    setImageViewVisible(true);
+                                  }}
+                                >
+                                  <Image
+                                    source={{ uri: fullImageUrl }}
+                                    style={styles.reviewImage}
+                                    resizeMode="cover"
+                                    onError={() => {
+                                      // Resim yükleme hatası
+                                    }}
+                                    onLoad={() => {
+                                      // Resim başarıyla yüklendi
+                                    }}
+                                  />
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </ScrollView>
+                        )}
+                        
                         <Text style={styles.reviewDate}>
                           {new Date(review.created_at).toLocaleDateString('tr-TR')}
                         </Text>
@@ -366,63 +438,22 @@ export default function ProductScreen() {
         </View>
       </ScrollView>
 
-      {/* Yorum Ekleme Modal */}
-      <Modal
+      {/* Gelişmiş Yorum Ekleme Modal */}
+      <ImageCommentModal
         visible={showReviewModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowReviewModal(false)}>
-              <Text style={styles.modalCancel}>İptal</Text>
-            </TouchableOpacity>
-            <Text style={styles.modalTitle}>Değerlendirme Yap</Text>
-            <TouchableOpacity
-              onPress={handleSubmitReview}
-              disabled={reviewLoading}
-            >
-              <Text style={[styles.modalSave, reviewLoading && styles.modalSaveDisabled]}>
-                Gönder
-              </Text>
-            </TouchableOpacity>
-          </View>
+        onClose={() => setShowReviewModal(false)}
+        onSubmit={handleSubmitReview}
+        productName={product.name}
+        loading={reviewLoading}
+      />
 
-          <ScrollView style={styles.modalContent}>
-            <Text style={styles.modalProductName}>{product.name}</Text>
-
-            <Text style={styles.modalLabel}>Puanın:</Text>
-            <View style={styles.ratingSelector}>
-              {[1, 2, 3, 4, 5].map((star) => (
-                <TouchableOpacity
-                  key={star}
-                  onPress={() => setReviewRating(star)}
-                >
-                  <Ionicons
-                    name={star <= reviewRating ? "star" : "star-outline"}
-                    size={32}
-                    color="#FFD700"
-                  />
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <Text style={styles.modalLabel}>Yorumun:</Text>
-            <TextInput
-              style={styles.reviewInput}
-              placeholder="Ürün hakkındaki düşüncelerini paylaş..."
-              multiline
-              numberOfLines={6}
-              value={reviewText}
-              onChangeText={setReviewText}
-              maxLength={1000}
-            />
-            <Text style={styles.charCount}>
-              {reviewText.length}/1000 karakter
-            </Text>
-          </ScrollView>
-        </View>
-      </Modal>
+      {/* Resim Büyütme Modal */}
+      <ImageViewModal
+        visible={imageViewVisible}
+        images={selectedImages}
+        initialIndex={selectedImageIndex}
+        onClose={() => setImageViewVisible(false)}
+      />
 
       {/* Bottom bar'ın hemen üstünde toast */}
       {toastVisible && (
@@ -672,6 +703,17 @@ const styles = StyleSheet.create({
   reviewDate: {
     fontSize: 12,
     color: "#999",
+  },
+  reviewImagesContainer: {
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  reviewImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    marginRight: 8,
+    backgroundColor: "#E5E7EB",
   },
 
   noReviews: {

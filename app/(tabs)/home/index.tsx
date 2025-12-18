@@ -2,7 +2,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -47,6 +47,59 @@ export default function HomeScreen() {
   const [selectedCategory, setSelectedCategory] = useState<string>("Tümü");
   const [search, setSearch] = useState<string>("");
   const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [searchFocused, setSearchFocused] = useState<boolean>(false);
+
+  // Optimized handlers with useCallback
+  const handleSearchChange = useCallback((text: string) => {
+    setSearch(text);
+  }, []);
+
+  const handleSearchFocus = useCallback(() => {
+    setSearchFocused(true);
+  }, []);
+
+  const handleSearchBlur = useCallback(() => {
+    setSearchFocused(false);
+  }, []);
+
+  const handleClearSearch = useCallback(() => {
+    setSearch("");
+  }, []);
+
+  // Kategori + arama filtresi
+  const filteredProducts = useMemo(() => {
+    let list = products;
+
+    if (selectedCategory !== "Tümü") {
+      list = list.filter((p: ApiProduct) => {
+        if (!p.category) return false;
+        return p.category.toLowerCase() === selectedCategory.toLowerCase();
+      });
+    }
+
+    if (search.trim().length > 0) {
+      const q = search.toLowerCase();
+      list = list.filter((p: ApiProduct) => p.name.toLowerCase().includes(q));
+    }
+
+    return list;
+  }, [products, selectedCategory, search]);
+
+  const handleSearchSubmit = useCallback(() => {
+    if (search.trim().length > 0) {
+      // Keyboard'u kapat
+      setSearchFocused(false);
+      // Toast mesajı göster
+      showToast(`"${search.trim()}" için arama yapıldı`);
+      // Eğer sonuç yoksa kullanıcıyı bilgilendir
+      const searchResults = filteredProducts.length;
+      if (searchResults === 0) {
+        setTimeout(() => {
+          showToast("Aradığınız ürün bulunamadı. Farklı bir kelime deneyin.");
+        }, 1000);
+      }
+    }
+  }, [search, filteredProducts.length, showToast]);
 
   // kategori animasyonu
   const activeScale = useRef(new Animated.Value(1)).current;
@@ -102,25 +155,6 @@ export default function HomeScreen() {
   };
 };
 
-
-  // Kategori + arama filtresi
-  const filteredProducts = useMemo(() => {
-    let list = products;
-
-    if (selectedCategory !== "Tümü") {
-      list = list.filter((p: ApiProduct) => {
-        if (!p.category) return false;
-        return p.category.toLowerCase() === selectedCategory.toLowerCase();
-      });
-    }
-
-    if (search.trim().length > 0) {
-      const q = search.toLowerCase();
-      list = list.filter((p: ApiProduct) => p.name.toLowerCase().includes(q));
-    }
-
-    return list;
-  }, [products, selectedCategory, search]);
 
   // En iyi fırsatlar: seçili kategoride indirim yüzdesi en yüksek ilk 3
   const bestDeals: Product[] = useMemo(() => {
@@ -209,7 +243,7 @@ export default function HomeScreen() {
     );
   };
 
-  const ListHeader = () => (
+  const ListHeader = useMemo(() => (
     <>
       {/* HEADER */}
       <View style={styles.header}>
@@ -224,18 +258,37 @@ export default function HomeScreen() {
       </View>
 
       {/* SEARCH BAR */}
-      <View style={styles.searchBox}>
-        <Ionicons name="search" size={20} color="#9CA3AF" />
+      <View style={[styles.searchBox, searchFocused && styles.searchBoxFocused]}>
+        <Ionicons 
+          name="search" 
+          size={20} 
+          color={searchFocused ? "#FF3B30" : "#9CA3AF"} 
+        />
         <TextInput
           placeholder="Ürün ara..."
           placeholderTextColor="#9CA3AF"
           style={styles.searchInput}
           value={search}
-          onChangeText={setSearch}
+          onChangeText={handleSearchChange}
+          onFocus={handleSearchFocus}
+          onBlur={handleSearchBlur}
+          onSubmitEditing={handleSearchSubmit}
+          returnKeyType="search"
+          autoCapitalize="none"
+          autoCorrect={false}
+          clearButtonMode="never"
+          selectionColor="#FF3B30"
+          keyboardType="default"
+          textContentType="none"
+          autoComplete="off"
         />
         {search.length > 0 && (
-          <TouchableOpacity onPress={() => setSearch("")}>
-            <Ionicons name="close-circle" size={18} color="#9CA3AF" />
+          <TouchableOpacity 
+            onPress={handleClearSearch}
+            style={styles.clearButton}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="close-circle" size={18} color="#FF3B30" />
           </TouchableOpacity>
         )}
       </View>
@@ -333,7 +386,7 @@ export default function HomeScreen() {
         </View>
       )}
     </>
-  );
+  ), [search, searchFocused, selectedCategory, activeScale, bestDeals, dealIndex, handleSearchChange, handleSearchFocus, handleSearchBlur, handleClearSearch]);
 
   return (
     <View style={styles.container}>
@@ -366,8 +419,18 @@ export default function HomeScreen() {
           }
           ListHeaderComponent={ListHeader}
           ListEmptyComponent={
-            <View style={styles.center}>
-              <Text style={styles.emptyText}>Bu kategoride ürün bulunamadı.</Text>
+            <View style={styles.emptyContainer}>
+              <Ionicons name="search-outline" size={48} color="#D1D5DB" />
+              <Text style={styles.emptyTitle}>
+                {search.length > 0 
+                  ? "Aradığınız ürün bulunamadı" 
+                  : "Bu kategoride ürün bulunamadı"}
+              </Text>
+              {search.length > 0 && (
+                <Text style={styles.emptySubtitle}>
+                  "{search}" için sonuç yok. Farklı bir arama deneyin.
+                </Text>
+              )}
             </View>
           }
         />
@@ -424,7 +487,23 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     borderRadius: 16,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: "transparent",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  searchBoxFocused: {
+    borderColor: "#FF3B30",
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
   },
   searchInput: {
     flex: 1,
@@ -432,6 +511,11 @@ const styles = StyleSheet.create({
     marginRight: 8,
     fontSize: 15,
     color: "#111827",
+    minHeight: 20,
+  },
+  clearButton: {
+    padding: 4,
+    borderRadius: 12,
   },
 
   /* CATEGORIES */
@@ -509,6 +593,27 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+  },
+  emptyContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 32,
+    paddingVertical: 48,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#374151",
+    marginTop: 16,
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: "#6B7280",
+    textAlign: "center",
+    lineHeight: 20,
   },
   loadingText: {
     marginTop: 8,
