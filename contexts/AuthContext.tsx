@@ -21,6 +21,7 @@ type AuthContextValue = {
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => void;
+  checkTokenValidity: () => Promise<boolean>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -93,12 +94,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  // Token geçerliliğini kontrol eden fonksiyon
+  const checkTokenValidity = async () => {
+    try {
+      const token = await AsyncStorage.getItem('auth_token');
+      if (!token) {
+        return false;
+      }
+      
+      // Basit token kontrolü - gerçek projede JWT decode edilebilir
+      // Şimdilik token varlığını kontrol ediyoruz
+      return true;
+    } catch (error) {
+      console.error('Token validity check error:', error);
+      return false;
+    }
+  };
+
   const value: AuthContextValue = {
     user,
     isLoading,
     login,
     register,
     logout,
+    checkTokenValidity,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

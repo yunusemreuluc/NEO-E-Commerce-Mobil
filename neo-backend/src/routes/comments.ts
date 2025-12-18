@@ -148,6 +148,87 @@ router.post('/test-review', async (req: any, res: any) => {
   }
 });
 
+// Basit rate limiter (test için)
+const simpleRateLimit = (req: any, res: any, next: any) => {
+  // Test endpoint için basit rate limiting (IP bazlı)
+  const clientIP = req.ip || req.connection.remoteAddress || 'unknown';
+  console.log(`Test endpoint çağrısı: ${clientIP}`);
+  next(); // Şimdilik tüm isteklere izin ver
+};
+
+// Test resimli yorum gönderme (FormData ile)
+router.post('/test-review-images',
+  simpleRateLimit,
+  upload.array('images', 5),
+  async (req: any, res: any) => {
+    // Test resimli yorum gönderiliyor
+    
+    try {
+      const { product_id, rating, comment } = req.body;
+      
+      // Basit validation
+      if (!product_id || !rating || !comment) {
+        return res.status(400).json({
+          success: false,
+          message: 'Eksik parametreler'
+        });
+      }
+
+      // Test kullanıcısı ID'si (1 varsayalım)
+      const testUserId = 1;
+      const uploadedFiles = req.files as Express.Multer.File[];
+      
+      // Veritabanına yorum kaydet
+      const [result] = await db.execute<ResultSetHeader>(
+        `INSERT INTO reviews (product_id, user_id, rating, comment, status) 
+         VALUES (?, ?, ?, ?, 'approved')`,
+        [product_id, testUserId, rating, comment]
+      );
+
+      const reviewId = result.insertId;
+      // Test resimli yorum kaydedildi
+
+      // Resimleri kaydet
+      const savedImages: string[] = [];
+      if (uploadedFiles && uploadedFiles.length > 0) {
+        for (let i = 0; i < uploadedFiles.length; i++) {
+          const file = uploadedFiles[i];
+          const imageUrl = `/uploads/comments/${file.filename}`;
+          savedImages.push(imageUrl);
+          
+          // Resim bilgisini veritabanına kaydet
+          try {
+            await db.execute(
+              `INSERT INTO comment_images (review_id, image_url) VALUES (?, ?)`,
+              [reviewId, imageUrl]
+            );
+            // Test resim kaydedildi
+          } catch (imgError) {
+            console.warn('Resim DB kaydı atlandı (tablo yok):', imgError);
+          }
+        }
+      }
+
+      res.json({
+        success: true,
+        message: 'Test resimli yorum başarıyla kaydedildi!',
+        data: { 
+          reviewId, 
+          imageCount: savedImages.length,
+          images: savedImages
+        }
+      });
+
+    } catch (error) {
+      console.error('Test resimli yorum hatası:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Veritabanı hatası: ' + (error as any).message
+      });
+    }
+  }
+);
+
 // Base64 resimli yorum gönderme
 router.post('/base64-review-images', async (req: any, res: any) => {
   // Base64 resimli yorum gönderiliyor

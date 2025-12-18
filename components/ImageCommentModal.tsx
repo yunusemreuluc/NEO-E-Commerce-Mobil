@@ -47,27 +47,43 @@ export default function ImageCommentModal({
   const [selectedImages, setSelectedImages] = useState<ImagePicker.ImagePickerAsset[]>([]);
   const [imageLoading, setImageLoading] = useState(false);
 
+  // ImagePicker kullanılabilirlik kontrolü
+  const checkImagePickerAvailability = () => {
+    if (!ImagePicker || !ImagePicker.MediaTypeOptions) {
+      Alert.alert('Hata', 'Resim seçici kullanılamıyor. Lütfen uygulamayı yeniden başlatın.');
+      return false;
+    }
+    return true;
+  };
+
   // İzin kontrolü ve resim seçimi
   const requestPermissions = async () => {
+    if (!checkImagePickerAvailability()) return false;
+    
     if (Platform.OS !== 'web') {
-      const { status: cameraStatus } = await ImagePicker.requestCameraPermissionsAsync();
-      const { status: mediaStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      
-      if (cameraStatus !== 'granted' || mediaStatus !== 'granted') {
-        Alert.alert(
-          'İzin Gerekli',
-          'Resim eklemek için kamera ve galeri izinleri gerekli.',
-          [
-            { text: 'İptal', style: 'cancel' },
-            { 
-              text: 'Ayarlara Git', 
-              onPress: () => {
-                // Kullanıcıyı ayarlara yönlendir (opsiyonel)
-                Alert.alert('Bilgi', 'Lütfen uygulama ayarlarından izinleri manuel olarak verin.');
+      try {
+        const { status: cameraStatus } = await ImagePicker.requestCameraPermissionsAsync();
+        const { status: mediaStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        
+        if (cameraStatus !== 'granted' || mediaStatus !== 'granted') {
+          Alert.alert(
+            'İzin Gerekli',
+            'Resim eklemek için kamera ve galeri izinleri gerekli.',
+            [
+              { text: 'İptal', style: 'cancel' },
+              { 
+                text: 'Ayarlara Git', 
+                onPress: () => {
+                  Alert.alert('Bilgi', 'Lütfen uygulama ayarlarından izinleri manuel olarak verin.');
+                }
               }
-            }
-          ]
-        );
+            ]
+          );
+          return false;
+        }
+      } catch (error) {
+        console.error('İzin kontrolü hatası:', error);
+        Alert.alert('Hata', 'İzin kontrolü sırasında hata oluştu.');
         return false;
       }
     }
@@ -77,6 +93,20 @@ export default function ImageCommentModal({
   // Resim sıkıştırma ve boyutlandırma
   const processImage = async (imageUri: string): Promise<string> => {
     try {
+      // Resim boyutunu kontrol et
+      const { width, height } = await new Promise<{width: number, height: number}>((resolve, reject) => {
+        Image.getSize(
+          imageUri,
+          (width, height) => resolve({ width, height }),
+          (error) => reject(error)
+        );
+      });
+
+      // Eğer resim zaten küçükse işleme gerek yok
+      if (width <= MAX_IMAGE_SIZE && height <= MAX_IMAGE_SIZE) {
+        return imageUri;
+      }
+
       const manipulatedImage = await ImageManipulator.manipulateAsync(
         imageUri,
         [
@@ -87,10 +117,12 @@ export default function ImageCommentModal({
           format: ImageManipulator.SaveFormat.JPEG
         }
       );
+      
       return manipulatedImage.uri;
     } catch (error) {
       console.error('Resim işleme hatası:', error);
-      return imageUri; // Hata durumunda orijinal URI'yi döndür
+      // Hata durumunda orijinal URI'yi döndür
+      return imageUri;
     }
   };
 
@@ -110,22 +142,34 @@ export default function ImageCommentModal({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsMultipleSelection: true,
         selectionLimit: MAX_IMAGES - selectedImages.length,
-        quality: 1,
-        exif: false
+        quality: 0.8, // Kaliteyi düşür
+        exif: false,
+        allowsEditing: false, // Düzenlemeyi kapat
+        aspect: undefined, // Aspect ratio sınırlaması kaldır
       });
 
       if (!result.canceled && result.assets) {
         const processedImages = await Promise.all(
-          result.assets.map(async (asset) => ({
-            ...asset,
-            uri: await processImage(asset.uri)
-          }))
+          result.assets.map(async (asset) => {
+            try {
+              const processedUri = await processImage(asset.uri);
+              return {
+                ...asset,
+                uri: processedUri
+              };
+            } catch (error) {
+              console.error('Resim işleme hatası:', error);
+              // Hata durumunda orijinal resmi kullan
+              return asset;
+            }
+          })
         );
         
         setSelectedImages(prev => [...prev, ...processedImages]);
       }
     } catch (error) {
-      Alert.alert('Hata', 'Resim seçilirken hata oluştu.');
+      console.error('Galeri seçim hatası:', error);
+      Alert.alert('Hata', 'Resim seçilirken hata oluştu. Lütfen tekrar deneyin.');
     } finally {
       setImageLoading(false);
     }
@@ -145,21 +189,29 @@ export default function ImageCommentModal({
     try {
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        quality: 1,
-        exif: false
+        quality: 0.8, // Kaliteyi düşür
+        exif: false,
+        allowsEditing: false, // Düzenlemeyi kapat
       });
 
       if (!result.canceled && result.assets?.[0]) {
-        const processedUri = await processImage(result.assets[0].uri);
-        const processedImage = {
-          ...result.assets[0],
-          uri: processedUri
-        };
-        
-        setSelectedImages(prev => [...prev, processedImage]);
+        try {
+          const processedUri = await processImage(result.assets[0].uri);
+          const processedImage = {
+            ...result.assets[0],
+            uri: processedUri
+          };
+          
+          setSelectedImages(prev => [...prev, processedImage]);
+        } catch (error) {
+          console.error('Kamera resmi işleme hatası:', error);
+          // Hata durumunda orijinal resmi kullan
+          setSelectedImages(prev => [...prev, result.assets[0]]);
+        }
       }
     } catch (error) {
-      Alert.alert('Hata', 'Fotoğraf çekilirken hata oluştu.');
+      console.error('Kamera çekim hatası:', error);
+      Alert.alert('Hata', 'Fotoğraf çekilirken hata oluştu. Lütfen tekrar deneyin.');
     } finally {
       setImageLoading(false);
     }
@@ -167,6 +219,8 @@ export default function ImageCommentModal({
 
   // Resim seçim menüsü
   const showImagePicker = () => {
+    if (!checkImagePickerAvailability()) return;
+    
     Alert.alert(
       'Resim Ekle',
       'Resim ekleme yöntemini seçin',

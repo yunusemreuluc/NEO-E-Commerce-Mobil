@@ -5,22 +5,22 @@ import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Alert,
-  Dimensions,
-  Image,
-  ScrollView,
-  Share,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    Alert,
+    Dimensions,
+    Image,
+    ScrollView,
+    Share,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from "react-native";
-import { createTables, getTestReviews, testReviewSubmit, testReviewWithImages } from "../api";
-import ImageCommentModal from "../components/ImageCommentModal";
-import { useAuth } from "../contexts/AuthContext";
-import { useCart } from "../contexts/CartContext";
-import { useFavorites } from "../contexts/FavoritesContext";
-import type { Product } from "../types/Product";
+import { addReview, addReviewWithImages, getProductReviews } from "../../../api";
+import ImageCommentModal from "../../../components/ImageCommentModal";
+import { useAuth } from "../../../contexts/AuthContext";
+import { useCart } from "../../../contexts/CartContext";
+import { useFavorites } from "../../../contexts/FavoritesContext";
+import type { Product } from "../../../types/Product";
 
 // API base URL'i import et
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || "http://10.106.118.212:4000";
@@ -131,30 +131,20 @@ export default function ProductScreen() {
   // Yorumları yükle (test endpoint kullan)
   const loadReviews = useCallback(async () => {
     try {
-      const data = await getTestReviews(product.id);
+      const data = await getProductReviews(product.id);
       setReviews(data.reviews || []);
       setReviewStats(data.stats || { average_rating: 0, total_reviews: 0 });
     } catch (error) {
+      // Yorumlar yüklenirken hata - sessizce devam et
       console.error('Yorumlar yüklenirken hata:', error);
     }
   }, [product.id]);
 
-  // Tabloları oluştur (ilk yüklemede)
-  const initializeTables = useCallback(async () => {
-    try {
-      await createTables();
-      console.log('Tablolar başarıyla oluşturuldu');
-    } catch (error) {
-      console.warn('Tablo oluşturma hatası (muhtemelen zaten var):', error);
-    }
-  }, []);
-
   useEffect(() => {
     if (product.id) {
-      initializeTables(); // Tabloları oluştur
-      loadReviews(); // Yorumları yükle
+      loadReviews();
     }
-  }, [loadReviews, initializeTables]);
+  }, [loadReviews]);
 
   // Resimli yorum gönder
   const handleSubmitReview = async (reviewData: {
@@ -170,57 +160,65 @@ export default function ProductScreen() {
     setReviewLoading(true);
     try {
       if (reviewData.images.length > 0) {
-        // Resimli yorum gönder - test endpoint kullan
-        try {
-          await testReviewWithImages(
-            product.id, 
-            reviewData.rating, 
-            reviewData.comment, 
-            reviewData.images
-          );
-          showToast("Resimli yorumunuz gönderildi!");
-        } catch (imageError: any) {
-          console.warn('Resimli yorum gönderilemedi:', imageError);
-          
-          // Endpoint mevcut değilse kullanıcıyı bilgilendir
-          if (imageError.message?.includes('endpoint')) {
-            Alert.alert(
-              'Bilgi', 
-              'Resimli yorum özelliği henüz hazır değil. Yorumunuz resim olmadan gönderilecek.',
-              [
-                { text: 'İptal', style: 'cancel' },
-                { 
-                  text: 'Devam Et', 
-                  onPress: async () => {
-                    try {
-                      await testReviewSubmit(product.id, reviewData.rating, reviewData.comment);
-                      setShowReviewModal(false);
-                      showToast("Yorum gönderildi! (Resimler yüklenemedi)");
-                      loadReviews();
-                    } catch (fallbackError) {
-                      Alert.alert('Hata', 'Yorum gönderilemedi.');
-                    }
-                  }
-                }
-              ]
-            );
-            return; // Modal'ı açık bırak
-          }
-          
-          // Diğer hatalar için resimsiz gönder
-          await testReviewSubmit(product.id, reviewData.rating, reviewData.comment);
-          showToast("Yorum gönderildi! (Resimler yüklenemedi)");
-        }
+        // Base64 ile resimli yorum gönder
+        await addReviewWithImages(
+          product.id, 
+          reviewData.rating, 
+          reviewData.comment, 
+          reviewData.images
+        );
       } else {
         // Resimsiz yorum gönder
-        await testReviewSubmit(product.id, reviewData.rating, reviewData.comment);
-        showToast("Yorumunuz gönderildi!");
+        await addReview(product.id, reviewData.rating, reviewData.comment);
       }
       
       setShowReviewModal(false);
+      showToast("Yorumunuz gönderildi! Moderasyon sonrası yayınlanacak.");
       loadReviews(); // Yorumları yenile
     } catch (error: any) {
-      console.error('Yorum gönderme hatası:', error);
+      // Token hatası kontrolü
+      if (error.message?.includes('Oturum süreniz dolmuş')) {
+        Alert.alert(
+          'Oturum Süresi Doldu', 
+          'Oturum süreniz dolmuş. Lütfen tekrar giriş yapın.',
+          [
+            {
+              text: 'Tamam',
+              onPress: () => {
+                setShowReviewModal(false);
+                // Kullanıcıyı login sayfasına yönlendir
+                router.push('/(auth)/login');
+              }
+            }
+          ]
+        );
+        return;
+      }
+      
+      // Ağ hatası kontrolü
+      if (error.message?.includes('Sunucuya bağlanılamıyor')) {
+        Alert.alert(
+          'Bağlantı Hatası', 
+          'Sunucuya bağlanılamıyor. İnternet bağlantınızı kontrol edin ve tekrar deneyin.',
+          [
+            { text: 'Tamam' }
+          ]
+        );
+        return;
+      }
+      
+      // Timeout hatası kontrolü
+      if (error.message?.includes('zaman aşımı')) {
+        Alert.alert(
+          'Zaman Aşımı', 
+          'İşlem çok uzun sürdü. Lütfen tekrar deneyin.',
+          [
+            { text: 'Tamam' }
+          ]
+        );
+        return;
+      }
+      
       Alert.alert('Hata', error.message || 'Yorum gönderilirken hata oluştu.');
       throw error; // Modal'ın kendi hata yönetimi için
     } finally {
@@ -430,8 +428,6 @@ export default function ProductScreen() {
                                 ? imageUrl 
                                 : `${API_BASE_URL}${imageUrl}`;
                               
-                              // Resim URL'i hazırlandı
-                              
                               return (
                                 <TouchableOpacity
                                   key={index}
@@ -476,8 +472,6 @@ export default function ProductScreen() {
               )}
             </View>
           </View>
-
-
         </View>
       </ScrollView>
 
@@ -646,7 +640,6 @@ const styles = StyleSheet.create({
     color: "#444",
     marginBottom: 2,
   },
-
   toast: {
     position: "absolute",
     left: 16,
@@ -663,8 +656,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "500",
   },
-  
-  // Yorum sistemi stilleri
   reviewsSection: {
     marginTop: 24,
   },
@@ -758,82 +749,11 @@ const styles = StyleSheet.create({
     marginRight: 8,
     backgroundColor: "#E5E7EB",
   },
-
   noReviews: {
     fontSize: 14,
     color: "#999",
     textAlign: "center",
     fontStyle: "italic",
     paddingVertical: 16,
-  },
-  
-  // Modal stilleri
-  modalContainer: {
-    flex: 1,
-    backgroundColor: "#F5F5F7",
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: "#ddd",
-    backgroundColor: "#fff",
-  },
-  modalCancel: {
-    fontSize: 16,
-    color: "#666",
-  },
-  modalTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  modalSave: {
-    fontSize: 16,
-    color: "#FF3B30",
-    fontWeight: "600",
-  },
-  modalSaveDisabled: {
-    opacity: 0.5,
-  },
-  modalContent: {
-    flex: 1,
-    padding: 16,
-  },
-  modalProductName: {
-    fontSize: 18,
-    fontWeight: "600",
-    marginBottom: 20,
-    textAlign: "center",
-  },
-  modalLabel: {
-    fontSize: 16,
-    fontWeight: "500",
-    marginBottom: 8,
-    marginTop: 16,
-  },
-  ratingSelector: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 8,
-    marginBottom: 16,
-  },
-  reviewInput: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 12,
-    fontSize: 14,
-    textAlignVertical: "top",
-    minHeight: 120,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "#ddd",
-  },
-  charCount: {
-    fontSize: 12,
-    color: "#999",
-    textAlign: "right",
-    marginTop: 4,
   },
 });

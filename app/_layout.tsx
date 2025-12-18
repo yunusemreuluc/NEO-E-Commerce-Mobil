@@ -26,7 +26,6 @@ export default function RootLayout() {
                 <Stack screenOptions={{ headerShown: false }}>
                   <Stack.Screen name="(auth)" options={{ headerShown: false }} />
                   <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                  <Stack.Screen name="product" options={{ headerShown: false }} />
                 </Stack>
               </ToastProvider>
             </CartProvider>
