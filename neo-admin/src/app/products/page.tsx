@@ -100,96 +100,211 @@ export default function ProductsPage() {
   };
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Ürünler</h1>
-        <Link
-          href="/products/new"
-          className="rounded-lg bg-red-500 px-4 py-2 text-white hover:bg-red-600"
-        >
-          + Yeni Ürün
-        </Link>
+    <div className="space-y-6">
+      {/* Page Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+            <span className="text-4xl">📦</span>
+            Ürünler
+          </h1>
+          <p className="text-gray-600 mt-2">Mağaza ürünlerinizi yönetin ve düzenleyin</p>
+          <div className="flex items-center gap-4 mt-3">
+            <div className="neo-badge neo-badge-info neo-badge-sm">
+              {products.length} Toplam Ürün
+            </div>
+            <div className="neo-badge neo-badge-success neo-badge-sm">
+              {products.filter(p => p.stock > 0).length} Stokta
+            </div>
+            <div className="neo-badge neo-badge-warning neo-badge-sm">
+              {products.filter(p => p.stock === 0).length} Tükendi
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-3">
+          <Link
+            href="/products/categories"
+            className="btn-secondary"
+          >
+            <span className="text-lg">🏷️</span>
+            Kategoriler
+          </Link>
+          <Link
+            href="/products/new"
+            className="btn-primary btn-lg"
+          >
+            <span className="text-xl">+</span>
+            Yeni Ürün Ekle
+          </Link>
+        </div>
       </div>
 
+      {/* Error Message */}
       {err && (
-        <div className="rounded-lg border border-red-900 bg-red-950/40 p-3 text-red-200">
-          {err}
+        <div className="neo-card border-red-200 bg-red-50 p-4">
+          <div className="flex items-center gap-2">
+            <span className="text-red-500 text-lg">⚠️</span>
+            <span className="text-red-700 font-medium">Hata:</span>
+            <span className="text-red-600">{err}</span>
+          </div>
         </div>
       )}
 
-      <div className="rounded-2xl border border-zinc-800 bg-zinc-950/40 overflow-hidden">
-        <div className="grid grid-cols-12 gap-3 border-b border-zinc-800 px-4 py-3 text-sm text-zinc-400">
-          <div className="col-span-1">ID</div>
-          <div className="col-span-2">Görsel</div>
-          <div className="col-span-3">Ad</div>
-          <div className="col-span-2">Kategori</div>
-          <div className="col-span-2">Fiyat</div>
-          <div className="col-span-1">Stok</div>
-          <div className="col-span-1 text-right">İşlem</div>
+      {/* Products Table */}
+      <div className="neo-card-elevated overflow-hidden">
+        <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b border-gray-200">
+          <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+            <span className="text-xl">📋</span>
+            Ürün Listesi
+          </h3>
         </div>
-
-        {loading ? (
-          <div className="p-5 text-zinc-400">Yükleniyor...</div>
-        ) : products.length === 0 ? (
-          <div className="p-5 text-zinc-400">Ürün yok.</div>
-        ) : (
-          <div className="divide-y divide-zinc-900">
-            {products.map((p) => (
-              <div
-                key={p.id}
-                className="grid grid-cols-12 gap-3 px-4 py-3 text-sm items-center hover:bg-zinc-900/40"
-              >
-                <div className="col-span-1 text-zinc-200">{p.id}</div>
-
-                <div className="col-span-2">
-                  <div className="relative h-12 w-12 overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950">
-                    <Image
-                      src={p.image_url || "https://picsum.photos/seed/neo/200/200"}
-                      alt={p.name}
-                      fill
-                      sizes="48px"
-                      className="object-cover"
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement;
-                        target.src = "https://picsum.photos/seed/neo/200/200";
-                      }}
-                    />
+        <table className="neo-table">
+          <thead>
+            <tr>
+              <th className="w-16">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">🆔</span>
+                  ID
+                </div>
+              </th>
+              <th className="w-20">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">🖼️</span>
+                  Görsel
+                </div>
+              </th>
+              <th>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">📝</span>
+                  Ürün Adı
+                </div>
+              </th>
+              <th className="w-32">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">🏷️</span>
+                  Kategori
+                </div>
+              </th>
+              <th className="w-32">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">💰</span>
+                  Fiyat
+                </div>
+              </th>
+              <th className="w-20">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">📦</span>
+                  Stok
+                </div>
+              </th>
+              <th className="w-32 text-right">
+                <div className="flex items-center justify-end gap-2">
+                  <span className="text-sm">⚙️</span>
+                  İşlemler
+                </div>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr>
+                <td colSpan={7} className="text-center py-12">
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="w-5 h-5 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></div>
+                    <span className="text-gray-500">Yükleniyor...</span>
                   </div>
-                </div>
+                </td>
+              </tr>
+            ) : products.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="text-center py-12">
+                  <div className="text-gray-500">
+                    <span className="text-4xl mb-2 block">📦</span>
+                    Henüz ürün bulunmuyor
+                  </div>
+                </td>
+              </tr>
+            ) : (
+              products.map((p) => (
+                <tr key={p.id}>
+                  <td className="font-mono text-sm text-gray-500">#{p.id}</td>
+                  
+                  <td>
+                    <div className="relative h-12 w-12 overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
+                      <Image
+                        src={p.image_url || "https://picsum.photos/seed/neo/200/200"}
+                        alt={p.name}
+                        fill
+                        sizes="48px"
+                        className="object-cover"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.src = "https://picsum.photos/seed/neo/200/200";
+                        }}
+                      />
+                    </div>
+                  </td>
 
-                <div className="col-span-3 text-zinc-100">{p.name}</div>
-                <div className="col-span-2 text-zinc-300">{p.category}</div>
+                  <td>
+                    <div className="font-medium text-gray-900">{p.name}</div>
+                  </td>
+                  
+                  <td>
+                    <span className="neo-badge neo-badge-info">{p.category}</span>
+                  </td>
 
-                <div className="col-span-2 text-zinc-100">
-                  {Number(p.price).toFixed(2)} ₺
-                  {p.discount != null ? (
-                    <span className="ml-2 rounded-full bg-red-500/15 px-2 py-0.5 text-xs text-red-200">
-                      -%{p.discount}
+                  <td>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-gray-900">
+                        {Number(p.price).toFixed(2)} ₺
+                      </span>
+                      {p.discount != null && (
+                        <span className="neo-badge neo-badge-danger">
+                          -%{p.discount}
+                        </span>
+                      )}
+                    </div>
+                  </td>
+
+                  <td>
+                    <span className={`neo-badge ${
+                      p.stock > 10 ? 'neo-badge-success' : 
+                      p.stock > 0 ? 'neo-badge-warning' : 'neo-badge-danger'
+                    }`}>
+                      {p.stock}
                     </span>
-                  ) : null}
-                </div>
+                  </td>
 
-                <div className="col-span-1 text-zinc-200">{p.stock}</div>
-
-                <div className="col-span-1 flex justify-end gap-2">
-                  <Link
-                    href={`/products/${p.id}/edit`}
-                    className="rounded-md border border-zinc-700 px-2 py-1 text-zinc-200 hover:bg-zinc-900"
-                  >
-                    Düzenle
-                  </Link>
-                  <button
-                    onClick={() => onDelete(p.id)}
-                    disabled={deletingId === p.id}
-                    className="rounded-md bg-red-500 px-2 py-1 text-white hover:bg-red-600 disabled:opacity-60"
-                  >
-                    {deletingId === p.id ? "..." : "Sil"}
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+                  <td>
+                    <div className="flex justify-end gap-2">
+                      <Link
+                        href={`/products/${p.id}/edit`}
+                        className="btn-info btn-sm"
+                      >
+                        <span className="text-sm">✏️</span>
+                        Düzenle
+                      </Link>
+                      <button
+                        onClick={() => onDelete(p.id)}
+                        disabled={deletingId === p.id}
+                        className="btn-danger btn-sm"
+                      >
+                        {deletingId === p.id ? (
+                          <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin"></div>
+                        ) : (
+                          <>
+                            <span className="text-sm">🗑️</span>
+                            Sil
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );

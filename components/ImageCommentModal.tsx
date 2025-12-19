@@ -25,9 +25,16 @@ interface ImageCommentModalProps {
     rating: number;
     comment: string;
     images: ImagePicker.ImagePickerAsset[];
+    existingImages?: string[];
   }) => Promise<void>;
   productName: string;
   loading?: boolean;
+  isEdit?: boolean;
+  initialData?: {
+    rating: number;
+    comment: string;
+    images: any[];
+  };
 }
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -40,12 +47,36 @@ export default function ImageCommentModal({
   onClose,
   onSubmit,
   productName,
-  loading = false
+  loading = false,
+  isEdit = false,
+  initialData
 }: ImageCommentModalProps) {
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState('');
   const [selectedImages, setSelectedImages] = useState<ImagePicker.ImagePickerAsset[]>([]);
+  const [existingImages, setExistingImages] = useState<string[]>([]); // Mevcut resim URL'leri
   const [imageLoading, setImageLoading] = useState(false);
+
+  // Düzenleme modunda initial data'yı yükle
+  useEffect(() => {
+    if (visible && isEdit && initialData) {
+      setRating(initialData.rating);
+      setComment(initialData.comment);
+      // Mevcut resimleri yükle
+      if (initialData.images && Array.isArray(initialData.images)) {
+        setExistingImages(initialData.images);
+      } else {
+        setExistingImages([]);
+      }
+      setSelectedImages([]); // Yeni seçilen resimler
+    } else if (visible && !isEdit) {
+      // Yeni yorum için sıfırla
+      setRating(5);
+      setComment('');
+      setSelectedImages([]);
+      setExistingImages([]);
+    }
+  }, [visible, isEdit, initialData]);
 
   // ImagePicker kullanılabilirlik kontrolü
   const checkImagePickerAvailability = () => {
@@ -131,7 +162,8 @@ export default function ImageCommentModal({
     const hasPermission = await requestPermissions();
     if (!hasPermission) return;
 
-    if (selectedImages.length >= MAX_IMAGES) {
+    const totalImages = selectedImages.length + existingImages.length;
+    if (totalImages >= MAX_IMAGES) {
       Alert.alert('Limit', `Maksimum ${MAX_IMAGES} resim ekleyebilirsiniz.`);
       return;
     }
@@ -141,7 +173,7 @@ export default function ImageCommentModal({
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsMultipleSelection: true,
-        selectionLimit: MAX_IMAGES - selectedImages.length,
+        selectionLimit: MAX_IMAGES - totalImages,
         quality: 0.8, // Kaliteyi düşür
         exif: false,
         allowsEditing: false, // Düzenlemeyi kapat
@@ -180,7 +212,8 @@ export default function ImageCommentModal({
     const hasPermission = await requestPermissions();
     if (!hasPermission) return;
 
-    if (selectedImages.length >= MAX_IMAGES) {
+    const totalImages = selectedImages.length + existingImages.length;
+    if (totalImages >= MAX_IMAGES) {
       Alert.alert('Limit', `Maksimum ${MAX_IMAGES} resim ekleyebilirsiniz.`);
       return;
     }
@@ -248,13 +281,15 @@ export default function ImageCommentModal({
       await onSubmit({
         rating,
         comment: comment.trim(),
-        images: selectedImages
+        images: selectedImages,
+        existingImages: existingImages // Mevcut resimleri de gönder
       });
       
       // Form temizle
       setRating(5);
       setComment('');
       setSelectedImages([]);
+      setExistingImages([]);
     } catch (error) {
       // Hata yönetimi parent component'te yapılacak
     }
@@ -304,7 +339,9 @@ export default function ImageCommentModal({
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Değerlendirme Yap</Text>
+          <Text style={styles.title}>
+            {isEdit ? 'Yorumu Düzenle' : 'Değerlendirme Yap'}
+          </Text>
         </View>
 
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -336,12 +373,12 @@ export default function ImageCommentModal({
             <View style={styles.imageSectionHeader}>
               <Text style={styles.sectionTitle}>Resimler (Opsiyonel)</Text>
               <Text style={styles.imageLimit}>
-                {selectedImages.length}/{MAX_IMAGES}
+                {selectedImages.length + existingImages.length}/{MAX_IMAGES}
               </Text>
             </View>
 
             {/* Resim Ekleme Butonu */}
-            {selectedImages.length < MAX_IMAGES && (
+            {(selectedImages.length + existingImages.length) < MAX_IMAGES && (
               <TouchableOpacity
                 style={styles.addImageButton}
                 onPress={showImagePicker}
@@ -359,14 +396,43 @@ export default function ImageCommentModal({
             )}
 
             {/* Seçilen Resimler */}
-            {selectedImages.length > 0 && (
+            {(selectedImages.length > 0 || existingImages.length > 0) && (
               <ScrollView 
                 horizontal 
                 showsHorizontalScrollIndicator={false}
                 style={styles.imagesContainer}
               >
+                {/* Mevcut resimler (düzenleme modunda) */}
+                {existingImages.map((imageUrl, index) => {
+                  // URL'yi tam hale getir
+                  const fullUrl = imageUrl.startsWith('http') 
+                    ? imageUrl 
+                    : `http://10.8.0.222:4000${imageUrl}`;
+                  
+                  return (
+                    <View key={`existing-${index}`} style={styles.imageWrapper}>
+                      <Image source={{ uri: fullUrl }} style={styles.selectedImage} />
+                      <TouchableOpacity
+                        style={styles.removeImageButton}
+                        onPress={() => {
+                          // Mevcut resmi kaldır
+                          setExistingImages(prev => prev.filter((_, i) => i !== index));
+                        }}
+                        disabled={loading}
+                      >
+                        <Ionicons name="close-circle" size={20} color="#FF3B30" />
+                      </TouchableOpacity>
+                      {/* Mevcut resim göstergesi */}
+                      <View style={styles.existingImageBadge}>
+                        <Text style={styles.existingImageText}>Mevcut</Text>
+                      </View>
+                    </View>
+                  );
+                })}
+                
+                {/* Yeni seçilen resimler */}
                 {selectedImages.map((image, index) => (
-                  <View key={index} style={styles.imageWrapper}>
+                  <View key={`new-${index}`} style={styles.imageWrapper}>
                     <Image source={{ uri: image.uri }} style={styles.selectedImage} />
                     <TouchableOpacity
                       style={styles.removeImageButton}
@@ -375,6 +441,10 @@ export default function ImageCommentModal({
                     >
                       <Ionicons name="close-circle" size={20} color="#FF3B30" />
                     </TouchableOpacity>
+                    {/* Yeni resim göstergesi */}
+                    <View style={styles.newImageBadge}>
+                      <Text style={styles.newImageText}>Yeni</Text>
+                    </View>
                   </View>
                 ))}
               </ScrollView>
@@ -631,6 +701,36 @@ const styles = StyleSheet.create({
   },
   submitButtonText: {
     fontSize: 16,
+    color: '#fff',
+    fontWeight: '600',
+  },
+  
+  // Resim badge'leri
+  existingImageBadge: {
+    position: 'absolute',
+    bottom: 4,
+    left: 4,
+    backgroundColor: 'rgba(59, 130, 246, 0.9)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  existingImageText: {
+    fontSize: 10,
+    color: '#fff',
+    fontWeight: '600',
+  },
+  newImageBadge: {
+    position: 'absolute',
+    bottom: 4,
+    left: 4,
+    backgroundColor: 'rgba(34, 197, 94, 0.9)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  newImageText: {
+    fontSize: 10,
     color: '#fff',
     fontWeight: '600',
   },

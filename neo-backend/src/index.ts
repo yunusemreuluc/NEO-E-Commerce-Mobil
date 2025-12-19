@@ -8,6 +8,7 @@ import path from "path";
 
 import authRouter from "./routes/auth";
 import commentsRouter from "./routes/comments";
+import notificationsRouter from "./routes/notifications";
 import productsRouter from "./routes/products";
 import reviewsRouter from "./routes/reviews";
 import usersRouter from "./routes/users";
@@ -67,6 +68,7 @@ app.use("/auth", authRouter);
 app.use("/products", productsRouter);
 app.use("/reviews", reviewsRouter);
 app.use("/comments", commentsRouter); // Gelişmiş yorum sistemi
+app.use("/notifications", notificationsRouter); // Bildirim sistemi
 app.use("/users", usersRouter);
 
 app.listen(port, "0.0.0.0", () => {

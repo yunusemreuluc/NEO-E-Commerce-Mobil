@@ -6,7 +6,7 @@ const nextConfig = {
       "picsum.photos",
       "res.cloudinary.com",
       "localhost",
-      "10.106.118.212", // 🔴 PC'nin LAN IP'si (kendine göre değiştir)
+      "192.168.137.1", // 🔴 PC'nin LAN IP'si (kendine göre değiştir)
     ],
 
     // Daha güvenli ve net tanım (uploads için)
@@ -19,7 +19,7 @@ const nextConfig = {
       },
       {
         protocol: "http",
-        hostname: "10.106.118.212", // 🔴 aynı IP
+        hostname: "192.168.137.1", // 🔴 aynı IP
         port: "4000",
         pathname: "/uploads/**",
       },

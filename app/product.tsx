@@ -5,15 +5,15 @@ import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Alert,
-  Dimensions,
-  Image,
-  ScrollView,
-  Share,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    Alert,
+    Dimensions,
+    Image,
+    ScrollView,
+    Share,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from "react-native";
 import { createTables, getTestReviews, testReviewSubmit, testReviewWithImages } from "../api";
 import ImageCommentModal from "../components/ImageCommentModal";
@@ -23,7 +23,7 @@ import { useFavorites } from "../contexts/FavoritesContext";
 import type { Product } from "../types/Product";
 
 // API base URL'i import et
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || "http://10.106.118.212:4000";
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || "http://10.8.0.222:4000";
 
 export default function ProductScreen() {
   const params = useLocalSearchParams<{
@@ -51,6 +51,14 @@ export default function ProductScreen() {
 
   const [reviewLoading, setReviewLoading] = useState(false);
   
+  // Yorum düzenleme state'leri
+  const [editingReview, setEditingReview] = useState<any>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  
+  // Ürün verisi state'i
+  const [productData, setProductData] = useState<any>(null);
+  const [productLoading, setProductLoading] = useState(false);
+  
   // Resim büyütme modal'ı
   const [imageViewVisible, setImageViewVisible] = useState(false);
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
@@ -65,6 +73,17 @@ export default function ProductScreen() {
       : undefined;
 
   const productImages = useMemo(() => {
+    // API'den gelen veri varsa onu kullan
+    if (productData?.images && Array.isArray(productData.images) && productData.images.length > 0) {
+      return productData.images;
+    }
+    
+    // API'den tek resim varsa
+    if (productData?.image_url) {
+      return [productData.image_url];
+    }
+    
+    // Parametrelerden resimler
     try {
       if (params.images) {
         const parsed = JSON.parse(params.images);
@@ -78,18 +97,59 @@ export default function ProductScreen() {
     
     // Fallback: tek resim
     return [params.image ?? "https://via.placeholder.com/400x300.png?text=NEO+Product"];
-  }, [params.images, params.image]);
+  }, [productData, params.images, params.image]);
+
+  // API'den ürün verilerini çek
+  useEffect(() => {
+    const fetchProductData = async () => {
+      if (!params.id) return;
+      
+      setProductLoading(true);
+      try {
+        const response = await fetch(`${API_BASE_URL}/products`);
+        if (response.ok) {
+          const products = await response.json();
+          const foundProduct = products.find((p: any) => p.id === Number(params.id));
+          
+          if (foundProduct) {
+            setProductData(foundProduct);
+          }
+        }
+      } catch (error) {
+        console.error('Ürün verisi çekme hatası:', error);
+      } finally {
+        setProductLoading(false);
+      }
+    };
+
+    fetchProductData();
+  }, [params.id]);
 
   const product: Product = useMemo(
-    () => ({
-      id: Number(params.id) || 0,
-      name: params.name ?? "Ürün adı",
-      price: priceNumber,
-      oldPrice: oldPriceNumber,
-      image: productImages[0],
-      category: params.category ?? "Genel",
-    }),
-    [params.id, params.name, params.category, priceNumber, oldPriceNumber, productImages]
+    () => {
+      // API'den gelen veri varsa onu kullan, yoksa parametreleri kullan
+      if (productData) {
+        return {
+          id: productData.id,
+          name: productData.name,
+          price: Number(productData.price) || 0,
+          oldPrice: productData.old_price ? Number(productData.old_price) : undefined,
+          image: productData.image_url || productData.images?.[0] || "https://via.placeholder.com/400x300.png?text=NEO",
+          category: productData.category || "Genel",
+        };
+      }
+      
+      // Fallback: parametrelerden ürün oluştur
+      return {
+        id: Number(params.id) || 0,
+        name: params.name ?? "Ürün adı",
+        price: priceNumber,
+        oldPrice: oldPriceNumber,
+        image: productImages[0],
+        category: params.category ?? "Genel",
+      };
+    },
+    [productData, params.id, params.name, params.category, priceNumber, oldPriceNumber, productImages]
   );
 
   const isFav = isFavorite(product.id);
@@ -223,6 +283,91 @@ export default function ProductScreen() {
       console.error('Yorum gönderme hatası:', error);
       Alert.alert('Hata', error.message || 'Yorum gönderilirken hata oluştu.');
       throw error; // Modal'ın kendi hata yönetimi için
+    } finally {
+      setReviewLoading(false);
+    }
+  };
+
+  // Yorum silme fonksiyonu
+  const handleDeleteReview = useCallback(async (reviewId: number) => {
+    Alert.alert(
+      'Yorumu Sil',
+      'Bu yorumu silmek istediğinizden emin misiniz?',
+      [
+        { text: 'İptal', style: 'cancel' },
+        {
+          text: 'Sil',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const response = await fetch(`${API_BASE_URL}/comments/user/${reviewId}`, {
+                method: 'DELETE',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  user_id: user?.id || 1
+                }),
+              });
+
+              if (response.ok) {
+                showToast('Yorumunuz silindi');
+                loadReviews(); // Yorumları yenile
+              } else {
+                Alert.alert('Hata', 'Yorum silinemedi');
+              }
+            } catch (error) {
+              console.error('Yorum silme hatası:', error);
+              Alert.alert('Hata', 'Yorum silinemedi');
+            }
+          }
+        }
+      ]
+    );
+  }, [loadReviews]);
+
+  // Yorum düzenleme fonksiyonu
+  const handleEditReview = useCallback((review: any) => {
+    setEditingReview(review);
+    setShowEditModal(true);
+  }, []);
+
+  // Yorum güncelleme fonksiyonu
+  const handleUpdateReview = async (reviewData: {
+    rating: number;
+    comment: string;
+    images: any[];
+    existingImages?: string[];
+  }) => {
+    if (!editingReview) return;
+
+    setReviewLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/comments/user/${editingReview.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          // Auth header eklenebilir
+        },
+        body: JSON.stringify({
+          rating: reviewData.rating,
+          comment: reviewData.comment,
+          user_id: user?.id || 1
+          // Resim güncelleme şimdilik atlanabilir
+        }),
+      });
+
+      if (response.ok) {
+        setShowEditModal(false);
+        setEditingReview(null);
+        showToast('Yorumunuz güncellendi');
+        loadReviews(); // Yorumları yenile
+      } else {
+        Alert.alert('Hata', 'Yorum güncellenemedi');
+      }
+    } catch (error) {
+      console.error('Yorum güncelleme hatası:', error);
+      Alert.alert('Hata', 'Yorum güncellenemedi');
     } finally {
       setReviewLoading(false);
     }
@@ -410,10 +555,32 @@ export default function ProductScreen() {
                     {reviews.map((review) => (
                       <View key={review.id} style={styles.reviewItem}>
                         <View style={styles.reviewHeader}>
-                          <Text style={styles.reviewerName}>{review.user_name}</Text>
-                          <View style={styles.starsRow}>
-                            {renderStars(review.rating, 14)}
+                          <View style={styles.reviewerInfo}>
+                            <Text style={styles.reviewerName}>{review.user_name}</Text>
+                            <View style={styles.starsRow}>
+                              {renderStars(review.rating, 14)}
+                            </View>
                           </View>
+                          
+                          {/* Kullanıcı kendi yorumuysa düzenle/sil butonları */}
+                          {user && (user.name === review.user_name || user.id === review.user_id) && (
+                            <View style={styles.reviewActions}>
+                              <TouchableOpacity
+                                style={styles.actionButton}
+                                onPress={() => handleEditReview(review)}
+                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                              >
+                                <Ionicons name="create-outline" size={18} color="#6B7280" />
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={styles.actionButton}
+                                onPress={() => handleDeleteReview(review.id)}
+                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                              >
+                                <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                              </TouchableOpacity>
+                            </View>
+                          )}
                         </View>
                         <Text style={styles.reviewComment}>{review.comment}</Text>
                         
@@ -488,6 +655,24 @@ export default function ProductScreen() {
         onSubmit={handleSubmitReview}
         productName={product.name}
         loading={reviewLoading}
+      />
+
+      {/* Yorum Düzenleme Modal */}
+      <ImageCommentModal
+        visible={showEditModal}
+        onClose={() => {
+          setShowEditModal(false);
+          setEditingReview(null);
+        }}
+        onSubmit={handleUpdateReview}
+        productName={product.name}
+        loading={reviewLoading}
+        isEdit={true}
+        initialData={editingReview ? {
+          rating: editingReview.rating,
+          comment: editingReview.comment,
+          images: editingReview.images || []
+        } : undefined}
       />
 
       {/* Resim Büyütme Modal */}
@@ -729,8 +914,21 @@ const styles = StyleSheet.create({
   reviewHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "flex-start",
     marginBottom: 6,
+  },
+  reviewerInfo: {
+    flex: 1,
+  },
+  reviewActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  actionButton: {
+    padding: 6,
+    borderRadius: 6,
+    backgroundColor: "#F3F4F6",
   },
   reviewerName: {
     fontSize: 14,

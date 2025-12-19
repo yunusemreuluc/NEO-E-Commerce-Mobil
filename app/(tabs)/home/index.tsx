@@ -4,20 +4,21 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  Animated,
-  FlatList,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Animated,
+    FlatList,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 
 import ProductCard from "../../../components/ProductCard";
 import { useCart } from "../../../contexts/CartContext";
+import { useNotifications } from "../../../contexts/NotificationContext";
 import { useToast } from "../../../contexts/ToastContext";
 import { useAppDispatch, useAppSelector } from "../../../store/hooks";
 import { fetchProducts } from "../../../store/slices/productsSlice";
@@ -39,6 +40,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const { addToCart, removeFromCart, isInCart } = useCart();
   const { showToast } = useToast();
+  const { unreadCount, fetchNotifications } = useNotifications();
   
   // Redux state - Hibrit yaklaşım: Products Redux'ta, Cart/Favorites Context'te
   const dispatch = useAppDispatch();
@@ -125,8 +127,13 @@ export default function HomeScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await dispatch(fetchProducts());
+    // Ürünleri ve bildirimleri yenile
+    await Promise.all([
+      dispatch(fetchProducts()),
+      fetchNotifications()
+    ]);
     setRefreshing(false);
+    showToast("Sayfa yenilendi");
   };
 
   useEffect(() => {
@@ -250,7 +257,22 @@ export default function HomeScreen() {
         <Text style={styles.logo}>NEO</Text>
 
         <View style={styles.headerRight}>
-          <Ionicons name="notifications-outline" size={24} color="#111827" />
+          <TouchableOpacity 
+            style={styles.notificationButton}
+            onPress={() => {
+              fetchNotifications(); // Bildirimleri yenile
+              router.push('/notifications' as any);
+            }}
+          >
+            <Ionicons name="notifications-outline" size={24} color="#111827" />
+            {unreadCount > 0 && (
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationBadgeText}>
+                  {unreadCount > 99 ? '99+' : unreadCount.toString()}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
           <TouchableOpacity style={styles.profileBubble}>
             <Text style={styles.profileText}>Y</Text>
           </TouchableOpacity>
@@ -463,6 +485,29 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 14,
+  },
+  notificationButton: {
+    position: 'relative',
+    padding: 4,
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    backgroundColor: '#FF3B30',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#F5F5F7',
+  },
+  notificationBadgeText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+    textAlign: 'center',
   },
   profileBubble: {
     width: 36,
