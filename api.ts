@@ -4,7 +4,7 @@ import type { ApiProduct } from "./types/Product";
 
 const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_BASE_URL ||
-  "http://10.8.0.222:4000";
+  "http://10.241.81.212:4000";
 
 // Token'ı header'a ekleyen yardımcı fonksiyon
 const getAuthHeaders = async () => {

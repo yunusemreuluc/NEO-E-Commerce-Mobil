@@ -46,6 +46,25 @@ export default function TabsLayout() {
   const cartCount = items.reduce((sum, item) => sum + item.quantity, 0);
   const favCount = favorites.length;
 
+  // Sabit tema renkleri
+  const colors = {
+    tabBarActive: "#FF3B30",
+    tabBarInactive: "#8E8E93",
+    tabBarBackground: "#FFFFFF",
+    border: "#E5E5EA",
+  };
+
+  // Sabit çeviriler
+  const t = (key: string) => {
+    const translations: { [key: string]: string } = {
+      home: "Ana Sayfa",
+      favorites: "Favoriler",
+      cart: "Sepet",
+      profile: "Profil",
+    };
+    return translations[key] || key;
+  };
+
   // Kullanıcı yoksa login ekranına at
   if (!user) {
     return <Redirect href="/login" />;
@@ -55,14 +74,18 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: "#FF3B30",
-        tabBarInactiveTintColor: "#888",
+        tabBarActiveTintColor: colors.tabBarActive,
+        tabBarInactiveTintColor: colors.tabBarInactive,
+        tabBarStyle: {
+          backgroundColor: colors.tabBarBackground,
+          borderTopColor: colors.border,
+        },
       }}
     >
       <Tabs.Screen
         name="home"
         options={{
-          title: "Ana Sayfa",
+          title: t("home"),
           tabBarIcon: ({ color, size }) => (
             <TabIcon iconName="home-outline" color={color} size={size} />
           ),
@@ -72,7 +95,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="favorites"
         options={{
-          title: "Favoriler",
+          title: t("favorites"),
           tabBarIcon: ({ color, size }) => (
             <TabIcon
               iconName="heart-outline"
@@ -97,7 +120,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="cart"
         options={{
-          title: "Sepet",
+          title: t("cart"),
           tabBarIcon: ({ color, size }) => (
             <TabIcon
               iconName="cart-outline"
@@ -112,7 +135,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: "Profil",
+          title: t("profile"),
           tabBarIcon: ({ color, size }) => (
             <TabIcon iconName="person-outline" color={color} size={size} />
           ),

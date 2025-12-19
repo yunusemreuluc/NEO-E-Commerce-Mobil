@@ -407,7 +407,7 @@ export default function ImageCommentModal({
                   // URL'yi tam hale getir
                   const fullUrl = imageUrl.startsWith('http') 
                     ? imageUrl 
-                    : `http://10.8.0.222:4000${imageUrl}`;
+                    : `http://10.241.81.212:4000${imageUrl}`;
                   
                   return (
                     <View key={`existing-${index}`} style={styles.imageWrapper}>

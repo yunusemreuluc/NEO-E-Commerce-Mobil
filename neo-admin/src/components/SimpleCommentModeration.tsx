@@ -132,7 +132,7 @@ export default function SimpleCommentModeration({
   // Yorum silme fonksiyonu
   const deleteComment = async (commentId: number, reason?: string) => {
     try {
-      const response = await fetch(`http://10.8.0.222:4000/comments/admin/${commentId}`, {
+      const response = await fetch(`http://10.241.81.212:4000/comments/admin/${commentId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${authToken}`,

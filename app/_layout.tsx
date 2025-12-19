@@ -11,6 +11,23 @@ import { SettingsProvider } from "../contexts/SettingsContext";
 import { ToastProvider } from "../contexts/ToastContext";
 import { store } from "../store";
 
+function AppContent() {
+  return (
+    <>
+      <StatusBar
+        style="dark"
+        backgroundColor="#FFFFFF"
+        translucent={false}
+      />
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="notifications" options={{ headerShown: false }} />
+      </Stack>
+    </>
+  );
+}
+
 export default function RootLayout() {
   return (
     <Provider store={store}>
@@ -20,16 +37,7 @@ export default function RootLayout() {
             <CartProvider>
               <NotificationProvider>
                 <ToastProvider>
-                  <StatusBar
-                    style="dark"
-                    backgroundColor="#F5F5F7"
-                    translucent={false}
-                  />
-                  <Stack screenOptions={{ headerShown: false }}>
-                    <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-                    <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                    <Stack.Screen name="notifications" options={{ headerShown: false }} />
-                  </Stack>
+                  <AppContent />
                 </ToastProvider>
               </NotificationProvider>
             </CartProvider>

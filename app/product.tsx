@@ -5,15 +5,15 @@ import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-    Alert,
-    Dimensions,
-    Image,
-    ScrollView,
-    Share,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  Alert,
+  Dimensions,
+  Image,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from "react-native";
 import { createTables, getTestReviews, testReviewSubmit, testReviewWithImages } from "../api";
 import ImageCommentModal from "../components/ImageCommentModal";
@@ -23,7 +23,7 @@ import { useFavorites } from "../contexts/FavoritesContext";
 import type { Product } from "../types/Product";
 
 // API base URL'i import et
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || "http://10.8.0.222:4000";
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || "http://10.241.81.212:4000";
 
 export default function ProductScreen() {
   const params = useLocalSearchParams<{

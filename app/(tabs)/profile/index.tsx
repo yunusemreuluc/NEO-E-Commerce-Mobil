@@ -4,12 +4,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Image,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { OPEN_WEATHER_API_KEY } from "../../../constants/Weather"; // 🔥 DİKKAT: 3 ../
@@ -210,81 +211,93 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Başlık */}
-      <Text style={styles.title}>Profil</Text>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Başlık */}
+        <Text style={styles.title}>Profil</Text>
 
-      {/* Kullanıcı kartı */}
-      <View style={styles.profileCard}>
-        <View style={styles.profileRow}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>Y</Text>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.profileName}>Yunus (Örnek Kullanıcı)</Text>
-            <Text style={styles.profileEmail}>yunus@example.com</Text>
+        {/* Kullanıcı kartı */}
+        <View style={styles.profileCard}>
+          <View style={styles.profileRow}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>Y</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.profileName}>Yunus (Örnek Kullanıcı)</Text>
+              <Text style={styles.profileEmail}>yunus@example.com</Text>
+            </View>
+
+            <TouchableOpacity style={styles.editButton}>
+              <Ionicons name="create-outline" size={18} color="#FF3B30" />
+            </TouchableOpacity>
           </View>
 
-          <TouchableOpacity style={styles.editButton}>
-            <Ionicons name="create-outline" size={18} color="#FF3B30" />
+          <View style={styles.profileStats}>
+            <View style={styles.statBox}>
+              <Text style={styles.statNumber}>12</Text>
+              <Text style={styles.statLabel}>Sipariş</Text>
+            </View>
+            <View style={styles.statBox}>
+              <Text style={styles.statNumber}>4</Text>
+              <Text style={styles.statLabel}>Favori</Text>
+            </View>
+            <View style={styles.statBox}>
+              <Text style={styles.statNumber}>3</Text>
+              <Text style={styles.statLabel}>Kupon</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Hava durumu kutusu */}
+        {renderWeatherCard()}
+
+        {/* Hızlı işlemler */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Hızlı İşlemler</Text>
+
+          {/* Siparişlerim */}
+          <TouchableOpacity
+            style={styles.rowButton}
+            onPress={() => router.push("/(tabs)/profile/orders")}
+          >
+            <Ionicons name="cube-outline" size={20} color="#111" />
+            <Text style={styles.rowButtonText}>Siparişlerim</Text>
+            <Ionicons name="chevron-forward" size={18} color="#999" />
+          </TouchableOpacity>
+
+          {/* Yorumlarım */}
+          <TouchableOpacity
+            style={styles.rowButton}
+            onPress={() => router.push("/(tabs)/profile/my-reviews")}
+          >
+            <Ionicons name="chatbubble-outline" size={20} color="#111" />
+            <Text style={styles.rowButtonText}>Yorumlarım</Text>
+            <Ionicons name="chevron-forward" size={18} color="#999" />
+          </TouchableOpacity>
+          
+          {/* Adreslerim */}
+          <TouchableOpacity
+            style={styles.rowButton}
+            onPress={() => router.push("/(tabs)/profile/addresses")}
+          >
+            <Ionicons name="location-outline" size={20} color="#111" />
+            <Text style={styles.rowButtonText}>Adreslerim</Text>
+            <Ionicons name="chevron-forward" size={18} color="#999" />
+          </TouchableOpacity>
+
+          {/* Ayarlar */}
+          <TouchableOpacity
+            style={styles.rowButton}
+            onPress={() => router.push("/(tabs)/profile/settings")}
+          >
+            <Ionicons name="settings-outline" size={20} color="#111" />
+            <Text style={styles.rowButtonText}>Ayarlar</Text>
+            <Ionicons name="chevron-forward" size={18} color="#999" />
           </TouchableOpacity>
         </View>
 
-        <View style={styles.profileStats}>
-          <View style={styles.statBox}>
-            <Text style={styles.statNumber}>12</Text>
-            <Text style={styles.statLabel}>Sipariş</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Text style={styles.statNumber}>4</Text>
-            <Text style={styles.statLabel}>Favori</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Text style={styles.statNumber}>3</Text>
-            <Text style={styles.statLabel}>Kupon</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Hava durumu kutusu */}
-      {renderWeatherCard()}
-
-      {/* Hızlı işlemler */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Hızlı İşlemler</Text>
-
-        {/* Siparişlerim */}
-        <TouchableOpacity
-          style={styles.rowButton}
-          onPress={() => router.push("/(tabs)/profile/orders")}
-        >
-          <Ionicons name="cube-outline" size={20} color="#111" />
-          <Text style={styles.rowButtonText}>Siparişlerim</Text>
-          <Ionicons name="chevron-forward" size={18} color="#999" />
-        </TouchableOpacity>
-
-        {/* Adreslerim */}
-        <TouchableOpacity
-          style={styles.rowButton}
-          onPress={() => router.push("/(tabs)/profile/addresses")}
-        >
-          <Ionicons name="location-outline" size={20} color="#111" />
-          <Text style={styles.rowButtonText}>Adreslerim</Text>
-          <Ionicons name="chevron-forward" size={18} color="#999" />
-        </TouchableOpacity>
-
-        {/* Ayarlar */}
-        <TouchableOpacity
-          style={styles.rowButton}
-          onPress={() => router.push("/(tabs)/profile/settings")}
-        >
-          <Ionicons name="settings-outline" size={20} color="#111" />
-          <Text style={styles.rowButtonText}>Ayarlar</Text>
-          <Ionicons name="chevron-forward" size={18} color="#999" />
-        </TouchableOpacity>
-      </View>
-
-      {/* Şehir seçme overlay'i */}
-      {renderCityPicker()}
+        {/* Şehir seçme overlay'i */}
+        {renderCityPicker()}
+      </ScrollView>
     </SafeAreaView>
   );
 }

@@ -1119,4 +1119,66 @@ router.delete('/user/:reviewId',
   }
 );
 
+// Kullanıcının kendi yorumlarını getir
+router.get('/user/my-reviews',
+  // authenticateToken, // Şimdilik auth bypass
+  async (req: any, res: any) => {
+    try {
+      const userId = 1; // Geçici olarak sabit user ID
+
+      // Kullanıcının yorumlarını getir
+      const [reviews] = await db.execute<RowDataPacket[]>(`
+        SELECT 
+          r.id,
+          r.product_id,
+          r.rating,
+          r.comment,
+          r.created_at,
+          r.status,
+          p.name as product_name,
+          p.image_url as product_image
+        FROM reviews r
+        LEFT JOIN products p ON r.product_id = p.id
+        WHERE r.user_id = ?
+        ORDER BY r.created_at DESC
+        LIMIT 50
+      `, [userId]);
+
+      // Her yorum için resimleri getir
+      const reviewsWithImages = await Promise.all(
+        reviews.map(async (review) => {
+          try {
+            const [images] = await db.execute<RowDataPacket[]>(
+              'SELECT image_url, image_type FROM comment_images WHERE review_id = ?',
+              [review.id]
+            );
+            return {
+              ...review,
+              images: images || []
+            };
+          } catch (error) {
+            // Tablo yoksa boş array döndür
+            return {
+              ...review,
+              images: []
+            };
+          }
+        })
+      );
+
+      res.json({
+        success: true,
+        reviews: reviewsWithImages
+      });
+
+    } catch (error) {
+      console.error('Kullanıcı yorumları getirme hatası:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Yorumlar getirilemedi'
+      });
+    }
+  }
+);
+
 export default router;

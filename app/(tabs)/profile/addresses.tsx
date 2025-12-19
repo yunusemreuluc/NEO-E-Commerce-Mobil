@@ -2,7 +2,7 @@
 
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
     ActivityIndicator,
     Alert,
@@ -84,6 +84,9 @@ export default function AddressesScreen() {
 
   // Harita merkezini kontrol eden state
   const [mapRegion, setMapRegion] = useState<Region>(DEFAULT_REGION);
+
+  // MapView referansı - animasyonlu hareket için
+  const mapRef = React.useRef<MapView>(null);
 
   // "Konumum" butonu yükleniyor mu?
   const [isGettingLocation, setIsGettingLocation] = useState(false);
@@ -193,43 +196,95 @@ export default function AddressesScreen() {
     );
   };
 
-  // Kullanıcının mevcut konumuna git
-  const centerOnUserLocation = async () => {
+  // Kullanıcının mevcut konumuna git - debounced ve optimize edilmiş
+  const centerOnUserLocation = useCallback(async () => {
+    // Eğer zaten konum alınıyorsa, yeni istek yapma
+    if (isGettingLocation) return;
+    
     try {
       setIsGettingLocation(true);
 
-      const { status } =
-        await Location.requestForegroundPermissionsAsync();
+      // Önce izin durumunu kontrol et
+      const { status } = await Location.requestForegroundPermissionsAsync();
 
       if (status !== "granted") {
         Alert.alert(
           "İzin Gerekli",
-          "Konumunuzu kullanabilmek için konum izni vermeniz gerekiyor."
+          "Konumunuzu kullanabilmek için konum izni vermeniz gerekiyor.",
+          [
+            { text: "İptal", style: "cancel" },
+            { text: "Ayarlara Git", onPress: () => Linking.openSettings() }
+          ]
         );
         return;
       }
 
-      const current = await Location.getCurrentPositionAsync({});
+      // Konum servislerinin açık olup olmadığını kontrol et
+      const isLocationEnabled = await Location.hasServicesEnabledAsync();
+      if (!isLocationEnabled) {
+        Alert.alert(
+          "Konum Servisleri Kapalı",
+          "Lütfen cihazınızın konum servislerini açın.",
+          [
+            { text: "Tamam", style: "default" }
+          ]
+        );
+        return;
+      }
+
+      // En hızlı konum alma ayarları
+      const current = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Low, // Balanced yerine Low (çok daha hızlı)
+        timeout: 3000, // 5 saniye yerine 3 saniye
+        maximumAge: 60000, // 1 dakika cache (daha uzun)
+      });
+
       const { latitude, longitude } = current.coords;
 
-      const region: Region = {
+      const region = {
         latitude,
         longitude,
-        latitudeDelta: 0.05,
-        longitudeDelta: 0.05,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
       };
 
-      setMapRegion(region);
+      // Haritayı animasyonlu olarak konuma götür
+      if (mapRef.current) {
+        mapRef.current.animateToRegion(region, 1000); // 1 saniye animasyon
+      }
+      
       setTempLocation({ latitude, longitude });
-    } catch (err) {
-      Alert.alert("Hata", "Konumunuz alınırken bir hata oluştu.");
+
+    } catch (err: any) {
+      console.error('Konum alma hatası:', err);
+      
+      // Timeout hatası için özel mesaj
+      if (err.code === 'E_LOCATION_TIMEOUT') {
+        Alert.alert(
+          "Konum Zaman Aşımı", 
+          "Konum alınamadı. Lütfen açık alanda tekrar deneyin.",
+          [{ text: "Tamam" }]
+        );
+      } else if (err.code === 'E_LOCATION_UNAVAILABLE') {
+        Alert.alert(
+          "Konum Servisi Kullanılamıyor", 
+          "GPS sinyali alınamıyor. Lütfen açık alanda tekrar deneyin.",
+          [{ text: "Tamam" }]
+        );
+      } else {
+        Alert.alert(
+          "Konum Hatası", 
+          "Konumunuz alınırken bir hata oluştu. Lütfen tekrar deneyin.",
+          [{ text: "Tamam" }]
+        );
+      }
     } finally {
       setIsGettingLocation(false);
     }
-  };
+  }, [isGettingLocation]); // Dependency array eklendi
 
-  // Konumu kaydet + adres alanlarını otomatik doldur
-  const handleLocationSave = async () => {
+  // Konumu kaydet + adres alanlarını otomatik doldur - optimize edilmiş
+  const handleLocationSave = useCallback(async () => {
     if (!tempLocation) {
       Alert.alert(
         "Konum Seçilmedi",
@@ -241,48 +296,84 @@ export default function AddressesScreen() {
     try {
       setIsGeocoding(true);
 
-      const results = await Location.reverseGeocodeAsync({
-        latitude: tempLocation.latitude,
-        longitude: tempLocation.longitude,
-      });
+      // Reverse geocoding ile adres bilgisini al - timeout eklendi
+      const results = await Promise.race([
+        Location.reverseGeocodeAsync({
+          latitude: tempLocation.latitude,
+          longitude: tempLocation.longitude,
+        }),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Geocoding timeout')), 8000)
+        )
+      ]) as Location.LocationGeocodedAddress[];
 
       if (results && results.length > 0) {
         const info = results[0];
-        const anyInfo: any = info;
+        
+        // Adres satırı oluştur
+        const addressParts: string[] = [];
+        if (info.streetNumber) addressParts.push(info.streetNumber);
+        if (info.street) addressParts.push(info.street);
+        if (info.name && info.name !== info.street) addressParts.push(info.name);
+        
+        const addressLine = addressParts.join(" ");
 
-        // Adres satırı
-        const lineParts: string[] = [];
-        if (info.street) lineParts.push(info.street);
-        if (info.name && info.name !== info.street) lineParts.push(info.name);
-        const line = lineParts.join(" ");
+        // Şehir/İlçe bilgisi
+        const cityParts: string[] = [];
+        if (info.district) cityParts.push(info.district);
+        if (info.city) cityParts.push(info.city);
+        if (info.region && info.region !== info.city) cityParts.push(info.region);
+        
+        const cityInfo = cityParts.join(" / ");
 
-        // İlçe / semt
-        const district =
-          anyInfo.subAdministrativeArea ||
-          anyInfo.subregion ||
-          anyInfo.district ||
-          info.city;
+        // Form alanlarını doldur (sadece boşsa)
+        if (addressLine && !newLine.trim()) {
+          setNewLine(addressLine);
+        }
+        if (cityInfo && !newCity.trim()) {
+          setNewCity(cityInfo);
+        }
+        if (!newTitle.trim()) {
+          setNewTitle("Yeni Adres");
+        }
 
-        // Şehir
-        const cityName = info.city || info.region || anyInfo.state;
-
-        const cityText = [district, cityName].filter(Boolean).join(" / ");
-
-        if (line && !newLine) setNewLine(line);
-        if (cityText && !newCity) setNewCity(cityText);
-        if (!newTitle) setNewTitle("Adresim");
+        // Başarı mesajı
+        Alert.alert(
+          "Konum Kaydedildi",
+          "Adres bilgileri otomatik olarak dolduruldu. İstediğiniz değişiklikleri yapabilirsiniz.",
+          [{ text: "Tamam" }]
+        );
+      } else {
+        // Adres bulunamadı ama konum kaydedildi
+        Alert.alert(
+          "Konum Kaydedildi",
+          "Adres bilgisi otomatik alınamadı, lütfen manuel olarak doldurun.",
+          [{ text: "Tamam" }]
+        );
+        
+        if (!newTitle.trim()) {
+          setNewTitle("Yeni Adres");
+        }
       }
-    } catch (err) {
+    } catch (err: any) {
+      console.error('Reverse geocoding hatası:', err);
       Alert.alert(
-        "Adres Alınamadı",
-        "Konumdan adres bilgisi okunamadı, alanları elle doldurabilirsiniz."
+        "Konum Kaydedildi",
+        err.message === 'Geocoding timeout' 
+          ? "Adres bilgisi alınamadı (zaman aşımı), lütfen manuel olarak doldurun."
+          : "Adres bilgisi otomatik alınamadı, lütfen manuel olarak doldurun.",
+        [{ text: "Tamam" }]
       );
+      
+      if (!newTitle.trim()) {
+        setNewTitle("Yeni Adres");
+      }
     } finally {
       setIsGeocoding(false);
       setSelectedLocation(tempLocation);
       setLocationPickerVisible(false);
     }
-  };
+  }, [tempLocation, newLine, newCity, newTitle]); // Dependencies eklendi
 
   // Harita picker overlay’i
   const renderLocationPicker = () => {
@@ -305,39 +396,64 @@ export default function AddressesScreen() {
         </View>
 
         <MapView
+          ref={mapRef}
           style={styles.locationMap}
-          region={mapRegion}
-          onRegionChangeComplete={setMapRegion}
+          initialRegion={mapRegion} // region yerine initialRegion
+          showsUserLocation={true}
+          showsMyLocationButton={false}
+          loadingEnabled={true}
+          loadingIndicatorColor="#2563EB"
+          loadingBackgroundColor="#F3F4F6"
+          moveOnMarkerPress={false}
+          pitchEnabled={false} // 3D görünümü kapat (performans)
+          rotateEnabled={false} // Döndürmeyi kapat (performans)
+          scrollEnabled={true}
+          zoomEnabled={true}
           onPress={(e) => {
             const coord = e.nativeEvent.coordinate;
             setTempLocation({
               latitude: coord.latitude,
               longitude: coord.longitude,
             });
-            setMapRegion((prev) => ({
-              ...prev,
-              latitude: coord.latitude,
-              longitude: coord.longitude,
-            }));
           }}
         >
           {tempLocation && (
-            <Marker coordinate={tempLocation} title="Seçilen Konum" />
+            <Marker 
+              coordinate={tempLocation} 
+              title="Seçilen Konum"
+              description="Bu konuma teslimat yapılacak"
+              anchor={{ x: 0.5, y: 1 }}
+            >
+              <View style={styles.customMarker}>
+                <Ionicons name="location" size={28} color="#FF3B30" />
+              </View>
+            </Marker>
           )}
         </MapView>
 
         {/* Alt bar + sağ üstte Konumum butonu */}
         <View style={styles.locationButtonsRow}>
-          {/* Sağ üstte yüzen KONUMUM butonu */}
+          {/* Sağ üstte yüzen KONUMUM butonu - debounced */}
           <TouchableOpacity
-            style={styles.floatingLocateButton}
+            style={[
+              styles.floatingLocateButton,
+              isGettingLocation && styles.floatingLocateButtonActive
+            ]}
             onPress={centerOnUserLocation}
             disabled={isGettingLocation}
+            activeOpacity={0.8}
+            hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
           >
             {isGettingLocation ? (
-              <ActivityIndicator size="small" color="#fff" />
+              <>
+                <ActivityIndicator size="small" color="#fff" />
+                <Text style={styles.locateButtonText}>Alınıyor...</Text>
+              </>
             ) : (
-              <Ionicons name="locate-outline" size={20} color="#fff" />
+              <>
+                <Ionicons name="locate" size={18} color="#fff" />
+                <Text style={styles.locateButtonText}>Konumum</Text>
+              </>
             )}
           </TouchableOpacity>
 
@@ -348,7 +464,10 @@ export default function AddressesScreen() {
               onPress={() => {
                 setTempLocation(null);
                 setLocationPickerVisible(false);
-                setMapRegion(DEFAULT_REGION);
+                // Haritayı default konuma döndür
+                if (mapRef.current) {
+                  mapRef.current.animateToRegion(DEFAULT_REGION, 500);
+                }
               }}
             >
               <Text style={[styles.locButtonText, { color: "#111" }]}>
@@ -717,11 +836,11 @@ const styles = StyleSheet.create({
   floatingLocateButton: {
     position: "absolute",
     right: 5,
-    top: -50, // Konumu Kaydet satırının hemen üstü
-    width: 48,
-    height: 48,
+    top: -60,
+    minWidth: 80,
+    height: 44,
     backgroundColor: "#2563EB",
-    borderRadius: 24,
+    borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
     elevation: 6,
@@ -730,5 +849,33 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowRadius: 4,
     zIndex: 20,
+    flexDirection: "row",
+    paddingHorizontal: 12,
+  },
+
+  floatingLocateButtonActive: {
+    backgroundColor: "#1D4ED8",
+    transform: [{ scale: 0.95 }],
+  },
+
+  locateButtonText: {
+    color: "#fff",
+    fontSize: 11,
+    fontWeight: "600",
+    marginLeft: 4,
+  },
+
+  // Custom marker stili
+  customMarker: {
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    padding: 4,
+    elevation: 5,
+    shadowColor: "#000",
+    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
   },
 });

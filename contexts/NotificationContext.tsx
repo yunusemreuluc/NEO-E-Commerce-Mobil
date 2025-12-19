@@ -42,7 +42,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       setLoading(true);
       
       // Geçici olarak token olmadan test et
-      const response = await fetch('http://10.8.0.222:4000/notifications', {
+      const response = await fetch('http://10.241.81.212:4000/notifications', {
         headers: {
           'Content-Type': 'application/json'
         }
@@ -64,7 +64,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   // Bildirimi okundu olarak işaretle
   const markAsRead = async (id: number) => {
     try {
-      const response = await fetch(`http://10.8.0.222:4000/notifications/${id}/read`, {
+      const response = await fetch(`http://10.241.81.212:4000/notifications/${id}/read`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json'
@@ -84,7 +84,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   // Tüm bildirimleri okundu olarak işaretle
   const markAllAsRead = async () => {
     try {
-      const response = await fetch('http://10.8.0.222:4000/notifications/read-all', {
+      const response = await fetch('http://10.241.81.212:4000/notifications/read-all', {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json'
@@ -104,7 +104,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   // Bildirimi sil
   const deleteNotification = async (id: number) => {
     try {
-      const response = await fetch(`http://10.8.0.222:4000/notifications/${id}`, {
+      const response = await fetch(`http://10.241.81.212:4000/notifications/${id}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json'
