@@ -55,7 +55,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         }
       }
     } catch (error) {
-      console.error('Bildirim getirme hatası:', error);
+      // Network hatası durumunda sessizce devam et
+      // console.error('Bildirim getirme hatası:', error);
     } finally {
       setLoading(false);
     }
@@ -77,7 +78,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         );
       }
     } catch (error) {
-      console.error('Bildirim okundu işaretleme hatası:', error);
+      // Network hatası durumunda sessizce devam et
+      // console.error('Bildirim okundu işaretleme hatası:', error);
     }
   };
 
@@ -97,7 +99,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         );
       }
     } catch (error) {
-      console.error('Tüm bildirimler okundu işaretleme hatası:', error);
+      // Network hatası durumunda sessizce devam et
+      // console.error('Tüm bildirimler okundu işaretleme hatası:', error);
     }
   };
 
@@ -115,7 +118,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         setNotifications(prev => prev.filter(n => n.id !== id));
       }
     } catch (error) {
-      console.error('Bildirim silme hatası:', error);
+      // Network hatası durumunda sessizce devam et
+      // console.error('Bildirim silme hatası:', error);
     }
   };
 

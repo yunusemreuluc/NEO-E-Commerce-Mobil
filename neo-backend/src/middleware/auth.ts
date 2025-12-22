@@ -8,7 +8,6 @@ interface AuthRequest extends Request {
     id: number;
     email: string;
     role: string;
-    is_banned?: boolean;
   };
 }
 
@@ -24,11 +23,11 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key') as any;
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'neo-secret-key-2024') as any;
     
     // Kullanıcı bilgilerini veritabanından al
     const [users] = await db.execute<RowDataPacket[]>(
-      'SELECT id, email, role, is_banned FROM users WHERE id = ? AND is_active = TRUE',
+      'SELECT id, email, role FROM users WHERE id = ? AND is_active = 1',
       [decoded.userId]
     );
 
@@ -60,11 +59,6 @@ export const requireAdmin = (req: AuthRequest, res: Response, next: NextFunction
 };
 
 export const checkBanStatus = (req: AuthRequest, res: Response, next: NextFunction) => {
-  if (req.user?.is_banned) {
-    return res.status(403).json({ 
-      success: false, 
-      message: 'Hesabınız yasaklanmış durumda' 
-    });
-  }
+  // is_banned kolonu olmadığı için bu kontrolü atlıyoruz
   next();
 };

@@ -4,6 +4,7 @@ import { StatusBar } from "expo-status-bar";
 import { Provider } from 'react-redux';
 
 import { NotificationProvider } from "@/contexts/NotificationContext";
+import { AddressProvider } from "../contexts/AddressContext";
 import { AuthProvider } from "../contexts/AuthContext";
 import { CartProvider } from "../contexts/CartContext";
 import { FavoritesProvider } from "../contexts/FavoritesContext";
@@ -35,11 +36,13 @@ export default function RootLayout() {
         <SettingsProvider>
           <FavoritesProvider>
             <CartProvider>
-              <NotificationProvider>
-                <ToastProvider>
-                  <AppContent />
-                </ToastProvider>
-              </NotificationProvider>
+              <AddressProvider>
+                <NotificationProvider>
+                  <ToastProvider>
+                    <AppContent />
+                  </ToastProvider>
+                </NotificationProvider>
+              </AddressProvider>
             </CartProvider>
           </FavoritesProvider>
         </SettingsProvider>

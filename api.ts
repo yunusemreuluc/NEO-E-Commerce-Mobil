@@ -2,12 +2,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import type { ApiProduct } from "./types/Product";
 
-const API_BASE_URL =
+export const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_BASE_URL ||
   "http://10.241.81.212:4000";
 
 // Token'ı header'a ekleyen yardımcı fonksiyon
-const getAuthHeaders = async () => {
+export const getAuthHeaders = async () => {
   const token = await AsyncStorage.getItem('auth_token');
   return {
     'Content-Type': 'application/json',

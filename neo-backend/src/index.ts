@@ -6,6 +6,7 @@ import fs from "fs";
 import multer from "multer";
 import path from "path";
 
+import addressesRouter from "./routes/addresses";
 import authRouter from "./routes/auth";
 import commentsRouter from "./routes/comments";
 import notificationsRouter from "./routes/notifications";
@@ -64,6 +65,7 @@ app.get("/", (_req, res) => {
   res.json({ message: "NEO Backend API çalışıyor" });
 });
 
+app.use("/addresses", addressesRouter);
 app.use("/auth", authRouter);
 app.use("/products", productsRouter);
 app.use("/reviews", reviewsRouter);
