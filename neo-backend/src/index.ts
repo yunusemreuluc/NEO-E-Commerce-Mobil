@@ -10,6 +10,8 @@ import addressesRouter from "./routes/addresses";
 import authRouter from "./routes/auth";
 import commentsRouter from "./routes/comments";
 import notificationsRouter from "./routes/notifications";
+import ordersRouter from "./routes/orders";
+import paymentMethodsRouter from "./routes/payment-methods";
 import productsRouter from "./routes/products";
 import reviewsRouter from "./routes/reviews";
 import usersRouter from "./routes/users";
@@ -67,6 +69,8 @@ app.get("/", (_req, res) => {
 
 app.use("/addresses", addressesRouter);
 app.use("/auth", authRouter);
+app.use("/orders", ordersRouter);
+app.use("/payment-methods", paymentMethodsRouter);
 app.use("/products", productsRouter);
 app.use("/reviews", reviewsRouter);
 app.use("/comments", commentsRouter); // Gelişmiş yorum sistemi

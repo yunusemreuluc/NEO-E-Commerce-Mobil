@@ -23,7 +23,7 @@ export default function ReviewsPage() {
 
   return (
     <SimpleCommentModeration 
-      apiBaseUrl="http://localhost:4000"
+      apiBaseUrl="http://10.241.81.212:4000"
       authToken={authToken}
     />
   );

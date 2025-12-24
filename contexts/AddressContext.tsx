@@ -29,7 +29,7 @@ export const AddressProvider: React.FC<AddressProviderProps> = ({ children }) =>
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { user } = useAuth();
+  const { user } = useAuth() || { user: null };
 
   // Varsayılan adresi bul
   const defaultAddress = addresses.find(addr => addr.is_default) || null;
@@ -45,6 +45,12 @@ export const AddressProvider: React.FC<AddressProviderProps> = ({ children }) =>
       const data = await addressService.getAddresses();
       setAddresses(data);
     } catch (err) {
+      console.error('Address loading error:', err);
+      // Network hatası durumunda sessizce geç, hata gösterme
+      if (err instanceof Error && err.message.includes('fetch')) {
+        console.warn('Network error, skipping address loading');
+        return;
+      }
       setError(err instanceof Error ? err.message : 'Adresler yüklenirken bir hata oluştu');
     } finally {
       setLoading(false);
@@ -56,15 +62,8 @@ export const AddressProvider: React.FC<AddressProviderProps> = ({ children }) =>
       setError(null);
       const newAddress = await addressService.createAddress(addressData);
       
-      // Eğer yeni adres varsayılan olarak işaretlendiyse, diğerlerini güncelle
-      if (newAddress.is_default) {
-        setAddresses(prev => [
-          ...prev.map(addr => ({ ...addr, is_default: false })),
-          newAddress
-        ]);
-      } else {
-        setAddresses(prev => [...prev, newAddress]);
-      }
+      // Adresleri yeniden yükle (sıralama korunur)
+      await loadAddresses();
       
       return newAddress;
     } catch (err) {
@@ -79,18 +78,8 @@ export const AddressProvider: React.FC<AddressProviderProps> = ({ children }) =>
       setError(null);
       const updatedAddress = await addressService.updateAddress(addressData);
       
-      // Eğer güncellenen adres varsayılan olarak işaretlendiyse, diğerlerini güncelle
-      if (updatedAddress.is_default) {
-        setAddresses(prev => prev.map(addr => ({
-          ...addr,
-          is_default: addr.id === updatedAddress.id ? true : false,
-          ...(addr.id === updatedAddress.id ? updatedAddress : {})
-        })));
-      } else {
-        setAddresses(prev => prev.map(addr => 
-          addr.id === updatedAddress.id ? updatedAddress : addr
-        ));
-      }
+      // Adresleri yeniden yükle (sıralama korunur)
+      await loadAddresses();
       
       return updatedAddress;
     } catch (err) {
@@ -117,11 +106,8 @@ export const AddressProvider: React.FC<AddressProviderProps> = ({ children }) =>
       setError(null);
       await addressService.setDefaultAddress(id);
       
-      // Local state'i güncelle
-      setAddresses(prev => prev.map(addr => ({
-        ...addr,
-        is_default: addr.id === id
-      })));
+      // Adresleri yeniden yükle (sıralama korunur)
+      await loadAddresses();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Varsayılan adres güncellenirken bir hata oluştu';
       setError(errorMessage);

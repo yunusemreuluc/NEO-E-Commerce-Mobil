@@ -16,7 +16,7 @@ export default function AdminLogin() {
     setError('');
 
     try {
-      const response = await fetch('http://localhost:4000/auth/login', {
+      const response = await fetch('http://10.241.81.212:4000/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

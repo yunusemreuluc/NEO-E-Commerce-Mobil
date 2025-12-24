@@ -127,6 +127,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   {pathname === '/reviews' && <span className="ml-auto text-xs">●</span>}
                 </Link>
                 <Link
+                  href="/orders"
+                  className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200 ${
+                    pathname.startsWith('/orders') 
+                      ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-lg shadow-orange-500/25 transform scale-105' 
+                      : 'text-gray-700 hover:bg-gradient-to-r hover:from-gray-100 hover:to-gray-50 hover:text-gray-900 hover:shadow-md'
+                  }`}
+                >
+                  <span className="text-xl">🛒</span>
+                  <span>Sipariş Yönetimi</span>
+                  {pathname.startsWith('/orders') && <span className="ml-auto text-xs">●</span>}
+                </Link>
+                <Link
                   href="/users"
                   className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200 ${
                     pathname === '/users' 

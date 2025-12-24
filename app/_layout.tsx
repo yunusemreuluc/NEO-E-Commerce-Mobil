@@ -4,10 +4,12 @@ import { StatusBar } from "expo-status-bar";
 import { Provider } from 'react-redux';
 
 import { NotificationProvider } from "@/contexts/NotificationContext";
+import { ErrorBoundary } from "../components/ErrorBoundary";
 import { AddressProvider } from "../contexts/AddressContext";
 import { AuthProvider } from "../contexts/AuthContext";
 import { CartProvider } from "../contexts/CartContext";
 import { FavoritesProvider } from "../contexts/FavoritesContext";
+import { OrderProvider } from "../contexts/OrderContext";
 import { SettingsProvider } from "../contexts/SettingsContext";
 import { ToastProvider } from "../contexts/ToastContext";
 import { store } from "../store";
@@ -31,22 +33,26 @@ function AppContent() {
 
 export default function RootLayout() {
   return (
-    <Provider store={store}>
-      <AuthProvider>
-        <SettingsProvider>
-          <FavoritesProvider>
-            <CartProvider>
-              <AddressProvider>
-                <NotificationProvider>
-                  <ToastProvider>
-                    <AppContent />
-                  </ToastProvider>
-                </NotificationProvider>
-              </AddressProvider>
-            </CartProvider>
-          </FavoritesProvider>
-        </SettingsProvider>
-      </AuthProvider>
-    </Provider>
+    <ErrorBoundary>
+      <Provider store={store}>
+        <AuthProvider>
+          <SettingsProvider>
+            <FavoritesProvider>
+              <CartProvider>
+                <AddressProvider>
+                  <OrderProvider>
+                    <NotificationProvider>
+                      <ToastProvider>
+                        <AppContent />
+                      </ToastProvider>
+                    </NotificationProvider>
+                  </OrderProvider>
+                </AddressProvider>
+              </CartProvider>
+            </FavoritesProvider>
+          </SettingsProvider>
+        </AuthProvider>
+      </Provider>
+    </ErrorBoundary>
   );
 }

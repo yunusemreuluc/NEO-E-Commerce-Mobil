@@ -16,6 +16,7 @@ import {
     View,
 } from "react-native";
 
+import { getCategories } from "../../../api";
 import ProductCard from "../../../components/ProductCard";
 import { useCart } from "../../../contexts/CartContext";
 import { useNotifications } from "../../../contexts/NotificationContext";
@@ -24,8 +25,20 @@ import { useAppDispatch, useAppSelector } from "../../../store/hooks";
 import { fetchProducts } from "../../../store/slices/productsSlice";
 import type { ApiProduct, Product } from "../../../types/Product";
 
-// Kategori konfigürasyonu
-const CATEGORY_CONFIG = [
+// Kategori tipi
+interface Category {
+  id: number;
+  name: string;
+  slug: string;
+  description?: string;
+  image_url?: string;
+  is_active: boolean;
+  sort_order: number;
+  product_count?: number;
+}
+
+// Sabit kategoriler (fallback için)
+const DEFAULT_CATEGORIES = [
   { label: "Tümü", value: "Tümü", icon: "grid-outline" as const },
   { label: "Elektronik", value: "Elektronik", icon: "tv-outline" as const },
   { label: "Moda", value: "Moda", icon: "shirt-outline" as const },
@@ -33,6 +46,24 @@ const CATEGORY_CONFIG = [
   { label: "Spor", value: "Spor", icon: "barbell-outline" as const },
   { label: "Ofis", value: "Ofis", icon: "briefcase-outline" as const },
 ];
+
+// İkon eşleştirme fonksiyonu
+const getCategoryIcon = (categoryName: string): keyof typeof Ionicons.glyphMap => {
+  const name = categoryName.toLowerCase();
+  
+  if (name.includes('elektronik') || name.includes('teknoloji')) return 'tv-outline';
+  if (name.includes('moda') || name.includes('giyim') || name.includes('kıyafet')) return 'shirt-outline';
+  if (name.includes('ev') || name.includes('yaşam') || name.includes('dekor')) return 'home-outline';
+  if (name.includes('spor') || name.includes('fitness') || name.includes('sağlık')) return 'barbell-outline';
+  if (name.includes('ofis') || name.includes('iş') || name.includes('büro')) return 'briefcase-outline';
+  if (name.includes('kitap') || name.includes('eğitim')) return 'book-outline';
+  if (name.includes('oyuncak') || name.includes('çocuk')) return 'game-controller-outline';
+  if (name.includes('kozmetik') || name.includes('güzellik')) return 'flower-outline';
+  if (name.includes('mutfak') || name.includes('yemek')) return 'restaurant-outline';
+  if (name.includes('bahçe') || name.includes('bitki')) return 'leaf-outline';
+  
+  return 'pricetag-outline'; // Varsayılan ikon
+};
 
 
 
@@ -50,6 +81,46 @@ export default function HomeScreen() {
   const [search, setSearch] = useState<string>("");
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [searchFocused, setSearchFocused] = useState<boolean>(false);
+  
+  // Dinamik kategoriler
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState<boolean>(false);
+
+  // Kategori konfigürasyonu - dinamik olarak oluştur
+  const categoryConfig = useMemo(() => {
+    const config = [
+      { label: "Tümü", value: "Tümü", icon: "grid-outline" as const }
+    ];
+
+    // Backend'ten gelen kategorileri ekle
+    categories
+      .filter(cat => cat.is_active && !cat.parent_id) // Sadece aktif ana kategoriler
+      .sort((a, b) => a.sort_order - b.sort_order) // Sıralama
+      .forEach(cat => {
+        config.push({
+          label: cat.name,
+          value: cat.name,
+          icon: getCategoryIcon(cat.name)
+        });
+      });
+
+    return config;
+  }, [categories]);
+
+  // Kategorileri yükle
+  const loadCategories = async () => {
+    try {
+      setCategoriesLoading(true);
+      const categoryList = await getCategories();
+      setCategories(categoryList);
+    } catch (err) {
+      console.error('Kategoriler yüklenirken hata:', err);
+      // Hata durumunda varsayılan kategorileri kullan
+      showToast("Kategoriler yüklenemedi, varsayılan kategoriler kullanılıyor");
+    } finally {
+      setCategoriesLoading(false);
+    }
+  };
 
   // Optimized handlers with useCallback
   const handleSearchChange = useCallback((text: string) => {
@@ -74,8 +145,15 @@ export default function HomeScreen() {
 
     if (selectedCategory !== "Tümü") {
       list = list.filter((p: ApiProduct) => {
-        if (!p.category) return false;
-        return p.category.toLowerCase() === selectedCategory.toLowerCase();
+        // Kategori adı ile eşleştir
+        if (p.category_name && p.category_name.toLowerCase() === selectedCategory.toLowerCase()) {
+          return true;
+        }
+        // Fallback: eski category field'ı ile eşleştir
+        if (p.category && p.category.toLowerCase() === selectedCategory.toLowerCase()) {
+          return true;
+        }
+        return false;
       });
     }
 
@@ -127,14 +205,20 @@ export default function HomeScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    // Ürünleri ve bildirimleri yenile
+    // Ürünleri, kategorileri ve bildirimleri yenile
     await Promise.all([
       dispatch(fetchProducts()),
+      loadCategories(),
       fetchNotifications()
     ]);
     setRefreshing(false);
     showToast("Sayfa yenilendi");
   };
+
+  useEffect(() => {
+    // İlk yüklemede kategorileri yükle
+    loadCategories();
+  }, []);
 
   useEffect(() => {
     // Redux store boşsa ürünleri yükle
@@ -321,7 +405,7 @@ export default function HomeScreen() {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.categoriesScrollContent}
       >
-        {CATEGORY_CONFIG.map((cat) => {
+        {categoryConfig.map((cat) => {
           const isActive = cat.value === selectedCategory;
           const ChipWrapper = isActive ? Animated.View : View;
 
@@ -367,6 +451,13 @@ export default function HomeScreen() {
             </TouchableOpacity>
           );
         })}
+        
+        {/* Kategori yükleniyor göstergesi */}
+        {categoriesLoading && (
+          <View style={styles.categoryLoadingWrapper}>
+            <ActivityIndicator size="small" color="#FF3B30" />
+          </View>
+        )}
       </ScrollView>
 
       {/* EN İYİ FIRSATLAR */}
@@ -592,6 +683,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#fff",
     fontWeight: "700",
+  },
+  categoryLoadingWrapper: {
+    width: 40,
+    height: 40,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 8,
   },
 
   /* BEST DEALS */

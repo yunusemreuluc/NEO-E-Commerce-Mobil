@@ -15,6 +15,33 @@ export const getAuthHeaders = async () => {
   };
 };
 
+// Categories API
+export async function getCategories() {
+  const url = `${API_BASE_URL}/products/categories/list`;
+
+  try {
+    const res = await fetch(url);
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`HTTP ${res.status} - ${text || "response yok"}`);
+    }
+
+    const data: any = await res.json();
+
+    // Backend'ten gelen format: {success: true, data: {categories: []}}
+    if (data.success && data.data && Array.isArray(data.data.categories)) {
+      return data.data.categories;
+    }
+
+    // Fallback için boş array
+    return [];
+  } catch (err) {
+    console.error('getCategories hatası:', err);
+    throw new Error("Kategoriler yüklenirken bir hata oluştu");
+  }
+}
+
 // Products API
 export async function getProducts(): Promise<ApiProduct[]> {
   const url = `${API_BASE_URL}/products`;
@@ -27,14 +54,21 @@ export async function getProducts(): Promise<ApiProduct[]> {
       throw new Error(`HTTP ${res.status} - ${text || "response yok"}`);
     }
 
-    const data: unknown = await res.json();
+    const data: any = await res.json();
 
-    if (!Array.isArray(data)) {
-      throw new Error("API array dönmedi. /products response formatını kontrol et.");
+    // Backend'ten gelen yeni format: {success: true, data: {products: []}}
+    if (data.success && data.data && Array.isArray(data.data.products)) {
+      return data.data.products as ApiProduct[];
     }
 
-    return data as ApiProduct[];
+    // Eski format için fallback: direkt array
+    if (Array.isArray(data)) {
+      return data as ApiProduct[];
+    }
+
+    throw new Error("API beklenmeyen format döndü. Response formatını kontrol et.");
   } catch (err) {
+    console.error('getProducts hatası:', err);
     throw new Error("Ürünler yüklenirken bir hata oluştu");
   }
 }
@@ -50,8 +84,21 @@ export async function getProduct(id: number): Promise<ApiProduct> {
       throw new Error(`HTTP ${res.status} - ${text || "response yok"}`);
     }
 
-    return await res.json();
+    const data: any = await res.json();
+
+    // Backend'ten gelen yeni format: {success: true, data: {product: {}}}
+    if (data.success && data.data && data.data.product) {
+      return data.data.product as ApiProduct;
+    }
+
+    // Eski format için fallback: direkt object
+    if (data && typeof data === 'object') {
+      return data as ApiProduct;
+    }
+
+    throw new Error("API beklenmeyen format döndü.");
   } catch (err) {
+    console.error('getProduct hatası:', err);
     throw new Error("Ürün yüklenirken bir hata oluştu");
   }
 }

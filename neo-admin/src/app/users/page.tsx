@@ -54,7 +54,7 @@ export default function UsersPage() {
       params.append('page', filter.page.toString());
       params.append('limit', filter.limit.toString());
 
-      const response = await fetch(`http://localhost:4000/users?${params}`, {
+      const response = await fetch(`http://10.241.81.212:4000/users?${params}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('admin_token')}`,
         },
@@ -74,7 +74,7 @@ export default function UsersPage() {
 
   const fetchUserDetails = async (userId: number) => {
     try {
-      const response = await fetch(`http://localhost:4000/users/${userId}`, {
+      const response = await fetch(`http://10.241.81.212:4000/users/${userId}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('admin_token')}`,
         },
@@ -92,7 +92,7 @@ export default function UsersPage() {
 
   const updateUserStatus = async (userId: number, isActive: boolean) => {
     try {
-      const response = await fetch(`http://localhost:4000/users/${userId}/status`, {
+      const response = await fetch(`http://10.241.81.212:4000/users/${userId}/status`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -114,7 +114,7 @@ export default function UsersPage() {
 
   const updateUserRole = async (userId: number, role: string) => {
     try {
-      const response = await fetch(`http://localhost:4000/users/${userId}/role`, {
+      const response = await fetch(`http://10.241.81.212:4000/users/${userId}/role`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

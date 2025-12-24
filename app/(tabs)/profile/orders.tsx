@@ -1,468 +1,591 @@
 // app/(tabs)/profile/orders.tsx
-
-import { Ionicons } from "@expo/vector-icons";
-import React, { useMemo, useState } from "react";
+import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
-  FlatList,
-  Image,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+    Alert,
+    FlatList,
+    Image,
+    RefreshControl,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-type OrderItem = {
-  id: string;
-  name: string;
-  image: string;
-  price: number;
-  quantity: number;
+import { useAuth } from '../../../contexts/AuthContext';
+import { useOrder } from '../../../contexts/OrderContext';
+import { Order } from '../../../types/Order';
+
+const getStatusColor = (status: Order['status']) => {
+  switch (status) {
+    case 'pending': return '#FF9500';
+    case 'confirmed': return '#007AFF';
+    case 'processing': return '#5856D6';
+    case 'shipped': return '#32D74B';
+    case 'delivered': return '#28a745';
+    case 'cancelled': return '#FF3B30';
+    default: return '#8E8E93';
+  }
 };
 
-type OrderStatus = "preparing" | "shipped" | "delivered" | "cancelled";
-
-type Order = {
-  id: string;
-  orderNo: string;
-  date: string;
-  status: OrderStatus;
-  total: number;
-  items: OrderItem[];
-  address: string;
+const getStatusText = (status: Order['status']) => {
+  switch (status) {
+    case 'pending': return 'Beklemede';
+    case 'confirmed': return 'Onaylandı';
+    case 'processing': return 'Hazırlanıyor';
+    case 'shipped': return 'Kargoda';
+    case 'delivered': return 'Teslim Edildi';
+    case 'cancelled': return 'İptal Edildi';
+    default: return status;
+  }
 };
-
-// --- ŞİMDİLİK DEMO SİPARİŞ VERİLERİ ---
-const MOCK_ORDERS: Order[] = [
-  {
-    id: "o1",
-    orderNo: "#NEO-2025-001",
-    date: "12 Kasım 2025, 21:34",
-    status: "delivered",
-    total: 1249.7,
-    address: "Örnek Mah. 123. Sok. No:10 Daire:3, İstanbul / Üsküdar",
-    items: [
-      {
-        id: "p1",
-        name: "Kablosuz Bluetooth Kulaklık",
-        image:
-          "https://images.pexels.com/photos/374870/pexels-photo-374870.jpeg?auto=compress&cs=tinysrgb&w=800",
-        price: 499.9,
-        quantity: 1,
-      },
-      {
-        id: "p2",
-        name: "Minimalist Masa Lambası",
-        image:
-          "https://images.pexels.com/photos/112811/pexels-photo-112811.jpeg?auto=compress&cs=tinysrgb&w=800",
-        price: 259.9,
-        quantity: 1,
-      },
-      {
-        id: "p3",
-        name: "Yoga Matı Kaymaz",
-        image:
-          "https://images.pexels.com/photos/3822622/pexels-photo-3822622.jpeg?auto=compress&cs=tinysrgb&w=800",
-        price: 199.9,
-        quantity: 2,
-      },
-    ],
-  },
-  {
-    id: "o2",
-    orderNo: "#NEO-2025-002",
-    date: "5 Kasım 2025, 15:10",
-    status: "shipped",
-    total: 799.9,
-    address: "Teknokent Cad. No:45 Kat:6, İstanbul / Maslak",
-    items: [
-      {
-        id: "p4",
-        name: "Erkek Spor Ayakkabı Kırmızı",
-        image:
-          "https://images.pexels.com/photos/19090/pexels-photo.jpg?auto=compress&cs=tinysrgb&w=800",
-        price: 799.9,
-        quantity: 1,
-      },
-    ],
-  },
-  {
-    id: "o3",
-    orderNo: "#NEO-2025-003",
-    date: "28 Ekim 2025, 11:02",
-    status: "preparing",
-    total: 349.9,
-    address: "İnönü Mah. 5. Sok. No:7, Ankara / Çankaya",
-    items: [
-      {
-        id: "p5",
-        name: "Bayan Günlük Elbise",
-        image:
-          "https://images.pexels.com/photos/1580044/pexels-photo-1580044.jpeg?auto=compress&cs=tinysrgb&w=800",
-        price: 349.9,
-        quantity: 1,
-      },
-    ],
-  },
-];
-
-type Filter = "all" | "active" | "past";
 
 export default function OrdersScreen() {
-  const [filter, setFilter] = useState<Filter>("all");
+  const { user } = useAuth();
+  const { orders, ordersLoading, ordersError, loadOrders, cancelOrder } = useOrder();
+  const [refreshing, setRefreshing] = useState(false);
 
-  const filteredOrders = useMemo(() => {
-    if (filter === "all") return MOCK_ORDERS;
-    if (filter === "active") {
-      // Hazırlanıyor + Kargoda
-      return MOCK_ORDERS.filter(
-        (o) => o.status === "preparing" || o.status === "shipped"
-      );
+  useEffect(() => {
+    if (user) {
+      loadOrders();
     }
-    // Geçmiş: Teslim edildi + İptal
-    return MOCK_ORDERS.filter(
-      (o) => o.status === "delivered" || o.status === "cancelled"
-    );
-  }, [filter]);
+  }, [user]);
 
-  const renderStatusChip = (status: OrderStatus) => {
-    let label = "";
-    let bg = "";
-    let color = "#fff";
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadOrders();
+    setRefreshing(false);
+  };
 
-    switch (status) {
-      case "preparing":
-        label = "Hazırlanıyor";
-        bg = "#FACC15";
-        color = "#1F2933";
-        break;
-      case "shipped":
-        label = "Kargoda";
-        bg = "#3B82F6";
-        break;
-      case "delivered":
-        label = "Teslim Edildi";
-        bg = "#22C55E";
-        break;
-      case "cancelled":
-        label = "İptal Edildi";
-        bg = "#EF4444";
-        break;
-    }
+  const handleOrderPress = (order: Order) => {
+    router.push(`/order-detail/${order.id}`);
+  };
 
-    return (
-      <View style={[styles.statusChip, { backgroundColor: bg }]}>
-        <Text style={[styles.statusChipText, { color }]}>{label}</Text>
-      </View>
+  const handleCancelOrder = (order: Order) => {
+    Alert.alert(
+      'Siparişi İptal Et',
+      `${order.order_number} numaralı siparişi iptal etmek istediğinizden emin misiniz?`,
+      [
+        { text: 'Vazgeç', style: 'cancel' },
+        {
+          text: 'İptal Et',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await cancelOrder(order.id);
+              Alert.alert('Başarılı', 'Sipariş başarıyla iptal edildi');
+            } catch (error) {
+              Alert.alert('Hata', error instanceof Error ? error.message : 'Sipariş iptal edilirken bir hata oluştu');
+            }
+          }
+        }
+      ]
     );
   };
 
-  const renderOrder = ({ item }: { item: Order }) => {
-    const images = item.items.slice(0, 3);
+  const renderOrderItem = ({ item: order }: { item: Order }) => {
+    // Backend'ten gelen ürün bilgilerini kullan
+    const firstProductImage = order.first_product_image;
+    const firstProductName = order.first_product_name || 'Ürün';
 
     return (
-      <View style={styles.orderCard}>
-        <View style={styles.orderHeader}>
-          <View>
-            <Text style={styles.orderNo}>{item.orderNo}</Text>
-            <Text style={styles.orderDate}>{item.date}</Text>
+      <TouchableOpacity
+        style={styles.orderCard}
+        onPress={() => handleOrderPress(order)}
+        activeOpacity={0.95}
+      >
+        {/* Üst Kısım - Durum ve Tarih */}
+        <View style={styles.cardHeader}>
+          <View style={[styles.statusIndicator, { backgroundColor: getStatusColor(order.status) }]} />
+          <View style={styles.headerInfo}>
+            <Text style={styles.orderNumber}>#{order.order_number}</Text>
+            <Text style={styles.statusTextLarge}>{getStatusText(order.status)}</Text>
           </View>
-          {renderStatusChip(item.status)}
-        </View>
-
-        {/* Ürün görselleri */}
-        <View style={styles.itemsRow}>
-          {images.map((p) => (
-            <View key={p.id} style={styles.itemImageWrapper}>
-              <Image
-                source={{ uri: p.image }}
-                style={styles.itemImage}
-                resizeMode="cover"
-              />
-            </View>
-          ))}
-          {item.items.length > 3 && (
-            <View style={styles.moreBadge}>
-              <Text style={styles.moreBadgeText}>
-                +{item.items.length - 3}
-              </Text>
-            </View>
-          )}
-        </View>
-
-        {/* Adres */}
-        <View style={styles.addressRow}>
-          <Ionicons name="location-outline" size={16} color="#9CA3AF" />
-          <Text style={styles.addressText} numberOfLines={2}>
-            {item.address}
+          <Text style={styles.orderDate}>
+            {new Date(order.created_at).toLocaleDateString('tr-TR', {
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric'
+            })}
           </Text>
         </View>
 
-        {/* Toplam + Detay butonu (ileride detay sayfasına gidebiliriz) */}
-        <View style={styles.footerRow}>
-          <View>
-            <Text style={styles.totalLabel}>Toplam</Text>
-            <Text style={styles.totalText}>
-              {item.total.toFixed(2)} ₺
-            </Text>
+        {/* Ana İçerik */}
+        <View style={styles.cardContent}>
+          {/* Sol Taraf - Ürün Görseli */}
+          <View style={styles.productSection}>
+            <View style={styles.productImageWrapper}>
+              {firstProductImage ? (
+                <Image
+                  source={{ uri: firstProductImage }}
+                  style={styles.productImageLarge}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View style={styles.placeholderImageLarge}>
+                  <Ionicons name="cube-outline" size={32} color="#CCCCCC" />
+                </View>
+              )}
+              
+              {/* Ürün Sayısı Badge */}
+              {(order.item_count || 0) > 1 && (
+                <View style={styles.productCountBadge}>
+                  <Text style={styles.productCountText}>{order.item_count}</Text>
+                </View>
+              )}
+            </View>
+            
+            {/* Ürün Bilgisi */}
+            <View style={styles.productDetails}>
+              <Text style={styles.productName} numberOfLines={2}>
+                {firstProductName}
+              </Text>
+              {(order.item_count || 0) > 1 && (
+                <Text style={styles.moreProducts}>
+                  +{(order.item_count || 1) - 1} ürün daha
+                </Text>
+              )}
+            </View>
           </View>
 
-          <TouchableOpacity
-            style={styles.detailButton}
-            onPress={() => {
-              // istersek sonra burada /profile/order-detail ekranına push yaparız
-              // şimdilik sadece ufak bir mesaj göstermen yeterli olabilir (Alert vs.)
-            }}
-          >
-            <Ionicons name="receipt-outline" size={16} color="#FF3B30" />
-            <Text style={styles.detailButtonText}>Detay</Text>
-          </TouchableOpacity>
+          {/* Sağ Taraf - Fiyat ve İşlemler */}
+          <View style={styles.actionSection}>
+            <View style={styles.priceSection}>
+              <Text style={styles.totalLabel}>Toplam</Text>
+              <Text style={styles.totalPrice}>₺{Number(order.total_amount || 0).toFixed(2)}</Text>
+            </View>
+            
+            <View style={styles.actionButtons}>
+              {['pending', 'confirmed'].includes(order.status) && (
+                <TouchableOpacity
+                  style={styles.cancelButtonNew}
+                  onPress={() => handleCancelOrder(order)}
+                >
+                  <Ionicons name="close" size={16} color="#FF3B30" />
+                </TouchableOpacity>
+              )}
+              
+              <TouchableOpacity style={styles.detailButtonNew}>
+                <Ionicons name="chevron-forward" size={20} color="#007AFF" />
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
-      </View>
+
+        {/* Alt Kısım - İlerleme Çubuğu */}
+        <View style={styles.progressSection}>
+          <View style={styles.progressBar}>
+            <View 
+              style={[
+                styles.progressFill, 
+                { 
+                  width: getProgressWidth(order.status),
+                  backgroundColor: getStatusColor(order.status)
+                }
+              ]} 
+            />
+          </View>
+          <Text style={styles.progressText}>
+            {getProgressText(order.status)}
+          </Text>
+        </View>
+      </TouchableOpacity>
     );
   };
 
+  // Yardımcı fonksiyonlar
+  const getProgressWidth = (status: Order['status']) => {
+    switch (status) {
+      case 'pending': return '20%';
+      case 'confirmed': return '40%';
+      case 'processing': return '60%';
+      case 'shipped': return '80%';
+      case 'delivered': return '100%';
+      case 'cancelled': return '0%';
+      default: return '20%';
+    }
+  };
+
+  const getProgressText = (status: Order['status']) => {
+    switch (status) {
+      case 'pending': return 'Sipariş alındı';
+      case 'confirmed': return 'Sipariş onaylandı';
+      case 'processing': return 'Hazırlanıyor';
+      case 'shipped': return 'Kargoya verildi';
+      case 'delivered': return 'Teslim edildi';
+      case 'cancelled': return 'İptal edildi';
+      default: return 'Durum bilinmiyor';
+    }
+  };
+
+  const renderEmptyState = () => (
+    <View style={styles.emptyState}>
+      <Ionicons name="bag-outline" size={64} color="#CCCCCC" />
+      <Text style={styles.emptyTitle}>Henüz siparişiniz yok</Text>
+      <Text style={styles.emptySubtitle}>
+        Alışverişe başlayın ve siparişlerinizi burada takip edin
+      </Text>
+      <TouchableOpacity
+        style={styles.shopButton}
+        onPress={() => router.push('/home')}
+      >
+        <Text style={styles.shopButtonText}>Alışverişe Başla</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  if (!user) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loginPrompt}>
+          <Ionicons name="person-outline" size={64} color="#CCCCCC" />
+          <Text style={styles.loginTitle}>Giriş Yapın</Text>
+          <Text style={styles.loginSubtitle}>
+            Siparişlerinizi görmek için giriş yapmanız gerekiyor
+          </Text>
+          <TouchableOpacity
+            style={styles.loginButton}
+            onPress={() => router.push('/login')}
+          >
+            <Text style={styles.loginButtonText}>Giriş Yap</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>Siparişlerim</Text>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.title}>Siparişlerim</Text>
+        <TouchableOpacity onPress={handleRefresh}>
+          <Ionicons name="refresh" size={24} color="#007AFF" />
+        </TouchableOpacity>
+      </View>
 
-      {/* Filtre barı */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.filterBar}
-        contentContainerStyle={{ paddingRight: 8 }}
-      >
-        <FilterChip
-          label="Tümü"
-          active={filter === "all"}
-          onPress={() => setFilter("all")}
-        />
-        <FilterChip
-          label="Aktif"
-          active={filter === "active"}
-          onPress={() => setFilter("active")}
-        />
-        <FilterChip
-          label="Geçmiş"
-          active={filter === "past"}
-          onPress={() => setFilter("past")}
-        />
-      </ScrollView>
+      {/* Error State */}
+      {ordersError && (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{ordersError}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={() => loadOrders()}>
+            <Text style={styles.retryButtonText}>Tekrar Dene</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
+      {/* Orders List */}
       <FlatList
-        data={filteredOrders}
-        keyExtractor={(item) => item.id}
-        renderItem={renderOrder}
-        contentContainerStyle={{ paddingBottom: 24 }}
-        ListEmptyComponent={
-          <View style={styles.emptyBox}>
-            <Ionicons
-              name="cube-outline"
-              size={40}
-              color="#D1D5DB"
-            />
-            <Text style={styles.emptyTitle}>
-              Henüz siparişin yok
-            </Text>
-            <Text style={styles.emptyText}>
-              NEO mağazasını keşfederek ilk siparişini
-              oluşturabilirsin.
-            </Text>
-          </View>
+        data={orders}
+        renderItem={renderOrderItem}
+        keyExtractor={(item) => item.id.toString()}
+        contentContainerStyle={[
+          styles.listContainer,
+          orders.length === 0 && styles.emptyContainer
+        ]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={['#007AFF']}
+            tintColor="#007AFF"
+          />
         }
+        ListEmptyComponent={!ordersLoading && !ordersError ? renderEmptyState : null}
       />
     </SafeAreaView>
-  );
-}
-
-type FilterChipProps = {
-  label: string;
-  active?: boolean;
-  onPress: () => void;
-};
-
-function FilterChip({ label, active, onPress }: FilterChipProps) {
-  return (
-    <TouchableOpacity
-      style={[
-        styles.filterChip,
-        active && styles.filterChipActive,
-      ]}
-      onPress={onPress}
-    >
-      <Text
-        style={[
-          styles.filterChipText,
-          active && styles.filterChipTextActive,
-        ]}
-      >
-        {label}
-      </Text>
-    </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F5F5F7",
+    backgroundColor: '#f5f7fa',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5E5',
   },
   title: {
-    fontSize: 24,
-    fontWeight: "700",
-    marginTop: 8,
-    marginBottom: 8,
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#333',
   },
-
-  filterBar: {
-    marginBottom: 8,
+  listContainer: {
+    padding: 16,
   },
-  filterChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    marginRight: 8,
-    backgroundColor: "#fff",
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
   },
-  filterChipActive: {
-    backgroundColor: "#FF3B30",
-    borderColor: "#FF3B30",
-  },
-  filterChipText: {
-    fontSize: 13,
-    color: "#4B5563",
-    fontWeight: "500",
-  },
-  filterChipTextActive: {
-    color: "#fff",
-  },
-
   orderCard: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 12,
-    marginBottom: 10,
-    elevation: 2,
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 6,
+    overflow: 'hidden',
   },
-  orderHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    paddingBottom: 12,
+    backgroundColor: '#FAFBFC',
   },
-  orderNo: {
+  statusIndicator: {
+    width: 4,
+    height: 40,
+    borderRadius: 2,
+    marginRight: 12,
+  },
+  headerInfo: {
+    flex: 1,
+  },
+  orderNumber: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#1a1a1a',
+    marginBottom: 2,
+  },
+  statusTextLarge: {
     fontSize: 14,
-    fontWeight: "600",
+    fontWeight: '600',
+    color: '#666',
   },
   orderDate: {
     fontSize: 12,
-    color: "#6B7280",
-    marginTop: 2,
+    color: '#999',
+    fontWeight: '500',
   },
-
-  statusChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
+  cardContent: {
+    flexDirection: 'row',
+    padding: 16,
+    paddingTop: 0,
   },
-  statusChipText: {
-    fontSize: 11,
-    fontWeight: "600",
-  },
-
-  itemsRow: {
-    flexDirection: "row",
-    marginBottom: 8,
-    marginTop: 4,
-  },
-  itemImageWrapper: {
-    width: 52,
-    height: 52,
-    borderRadius: 12,
-    overflow: "hidden",
-    marginRight: 6,
-    backgroundColor: "#E5E7EB",
-  },
-  itemImage: {
-    width: "100%",
-    height: "100%",
-  },
-  moreBadge: {
-    width: 52,
-    height: 52,
-    borderRadius: 12,
-    backgroundColor: "#F3F4F6",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  moreBadgeText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#6B7280",
-  },
-
-  addressRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  addressText: {
-    marginLeft: 4,
-    fontSize: 12,
-    color: "#4B5563",
+  productSection: {
     flex: 1,
+    flexDirection: 'row',
   },
-
-  footerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+  productImageWrapper: {
+    position: 'relative',
+    marginRight: 12,
+  },
+  productImageLarge: {
+    width: 80,
+    height: 80,
+    borderRadius: 16,
+    backgroundColor: '#F5F5F5',
+  },
+  placeholderImageLarge: {
+    width: 80,
+    height: 80,
+    borderRadius: 16,
+    backgroundColor: '#F5F5F5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
+    borderStyle: 'dashed',
+  },
+  productCountBadge: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: '#FF3B30',
+    borderRadius: 12,
+    minWidth: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  productCountText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  productDetails: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  productName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    lineHeight: 22,
+    marginBottom: 4,
+  },
+  moreProducts: {
+    fontSize: 13,
+    color: '#666',
+    fontWeight: '500',
+  },
+  actionSection: {
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    minWidth: 100,
+  },
+  priceSection: {
+    alignItems: 'flex-end',
+    marginBottom: 12,
   },
   totalLabel: {
     fontSize: 12,
-    color: "#6B7280",
+    color: '#999',
+    fontWeight: '500',
+    marginBottom: 2,
   },
-  totalText: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#111827",
+  totalPrice: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#007AFF',
   },
-  detailButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  cancelButtonNew: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FFF5F5',
     borderWidth: 1,
-    borderColor: "#FECACA",
-    backgroundColor: "#FEF2F2",
+    borderColor: '#FFE0E0',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  detailButtonText: {
-    marginLeft: 4,
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#B91C1C",
+  detailButtonNew: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F0F8FF',
+    borderWidth: 1,
+    borderColor: '#E0F0FF',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-
-  emptyBox: {
-    alignItems: "center",
-    marginTop: 40,
-    paddingHorizontal: 20,
+  progressSection: {
+    padding: 16,
+    paddingTop: 8,
+    backgroundColor: '#FAFBFC',
+  },
+  progressBar: {
+    height: 4,
+    backgroundColor: '#E5E5E5',
+    borderRadius: 2,
+    marginBottom: 8,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  progressText: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 40,
   },
   emptyTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginTop: 8,
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#333',
+    marginTop: 16,
+    marginBottom: 8,
   },
-  emptyText: {
-    fontSize: 13,
-    color: "#6B7280",
-    marginTop: 4,
-    textAlign: "center",
+  emptySubtitle: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 24,
+    paddingHorizontal: 32,
+  },
+  shopButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  shopButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  loginPrompt: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  loginTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#333',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  loginSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  loginButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  loginButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  errorContainer: {
+    backgroundColor: '#FFE6E6',
+    padding: 16,
+    margin: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  errorText: {
+    color: '#D32F2F',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  retryButton: {
+    backgroundColor: '#D32F2F',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '500',
   },
 });

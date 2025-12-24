@@ -3,24 +3,52 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
+    Alert,
     FlatList,
     Image,
     StyleSheet,
     Text,
     TouchableOpacity,
-    View,
+    View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useAuth } from "../../contexts/AuthContext";
 import { useCart, type CartItem } from "../../contexts/CartContext";
 
 export default function CartScreen() {
   const { items, totalPrice, updateQuantity, removeFromCart, clearCart } =
     useCart();
+  const { user } = useAuth();
   const router = useRouter();
 
   const [confirmVisible, setConfirmVisible] = useState(false);
 
   const hasItems = items.length > 0;
+
+  const handleCheckout = () => {
+    if (!hasItems) {
+      Alert.alert('Uyarı', 'Sepetiniz boş. Önce ürün ekleyin.');
+      return;
+    }
+
+    if (!user) {
+      Alert.alert(
+        'Giriş Gerekli',
+        'Siparişi tamamlamak için giriş yapmanız gerekiyor.',
+        [
+          { text: 'İptal', style: 'cancel' },
+          { 
+            text: 'Giriş Yap', 
+            onPress: () => router.push('/login')
+          }
+        ]
+      );
+      return;
+    }
+
+    // Checkout sayfasına yönlendir
+    router.push('/checkout');
+  };
 
   const goToProduct = (item: CartItem) => {
     router.push({
@@ -126,6 +154,7 @@ export default function CartScreen() {
 
               <TouchableOpacity
                 style={[styles.summaryButton, styles.checkoutButton]}
+                onPress={handleCheckout}
               >
                 <Text style={styles.checkoutText}>Siparişi Tamamla</Text>
               </TouchableOpacity>
