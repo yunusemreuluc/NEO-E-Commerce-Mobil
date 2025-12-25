@@ -75,8 +75,38 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {/* Sidebar */}
           <aside className="w-72 bg-gradient-to-b from-white to-gray-50 border-r border-gray-200 shadow-lg">
             <div className="p-6 border-b border-gray-200">
-              <div className="text-2xl font-extrabold tracking-wide flex items-center gap-2">
-                <span className="text-3xl">🚀</span>
+              <div className="text-2xl font-extrabold tracking-wide flex items-center gap-3">
+                <div className="w-10 h-10 flex items-center justify-center relative">
+                  {/* NEO Maskot - Stylized Robot Head */}
+                  <div className="relative w-8 h-8">
+                    {/* Ana kafa */}
+                    <div className="w-8 h-6 bg-gradient-to-b from-gray-200 to-gray-300 rounded-full border border-gray-400 relative">
+                      {/* Gözlük/Visor */}
+                      <div className="absolute top-1 left-0.5 right-0.5 h-2 bg-gradient-to-r from-green-400 via-green-500 to-green-400 rounded-sm opacity-90 shadow-inner">
+                        {/* Matrix efekti için küçük çizgiler */}
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-green-300 to-transparent opacity-50 rounded-sm"></div>
+                      </div>
+                      
+                      {/* Anten topları */}
+                      <div className="absolute -top-1 left-1 w-1.5 h-1.5 bg-gradient-to-br from-green-300 to-green-500 rounded-full shadow-sm"></div>
+                      <div className="absolute -top-1 right-1 w-1.5 h-1.5 bg-gradient-to-br from-green-300 to-green-500 rounded-full shadow-sm"></div>
+                      
+                      {/* Ağız/Burun */}
+                      <div className="absolute bottom-1 left-1/2 transform -translate-x-1/2 w-1 h-1 bg-green-500 rounded-full opacity-80"></div>
+                    </div>
+                    
+                    {/* Vücut */}
+                    <div className="absolute top-4 left-1 w-6 h-4 bg-gradient-to-b from-gray-700 via-gray-800 to-gray-900 rounded-sm">
+                      {/* Göğüs yıldızı */}
+                      <div className="absolute top-1 left-1/2 transform -translate-x-1/2 w-1 h-1 bg-green-400 rounded-full shadow-sm"></div>
+                      {/* Matrix çizgileri */}
+                      <div className="absolute inset-1 opacity-30">
+                        <div className="w-px h-full bg-green-400 absolute left-1"></div>
+                        <div className="w-px h-full bg-green-400 absolute right-1"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
                 <div>
                   <span className="text-red-500">NEO</span>{' '}
                   <span className="text-gray-900">Admin</span>
@@ -150,21 +180,25 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   <span>Kullanıcı Yönetimi</span>
                   {pathname === '/users' && <span className="ml-auto text-xs">●</span>}
                 </Link>
+
+                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider px-3 mb-3 mt-6">
+                  Sistem
+                </div>
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center gap-3 w-full rounded-xl px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gradient-to-r hover:from-red-50 hover:to-red-100 hover:text-red-700 transition-all duration-200 hover:shadow-md"
+                >
+                  <span className="text-xl">🚪</span>
+                  <span>Güvenli Çıkış</span>
+                  <span className="ml-auto text-xs">→</span>
+                </button>
                 
 
               </div>
             </nav>
 
-            <div className="absolute bottom-0 left-0 right-0 w-72 p-4 border-t border-gray-200 bg-gradient-to-t from-gray-50 to-white">
-              <button
-                onClick={handleLogout}
-                className="flex items-center gap-3 w-full rounded-xl px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gradient-to-r hover:from-red-50 hover:to-red-100 hover:text-red-700 transition-all duration-200 hover:shadow-md"
-              >
-                <span className="text-xl">🚪</span>
-                <span>Güvenli Çıkış</span>
-                <span className="ml-auto text-xs">→</span>
-              </button>
-              <div className="mt-3 text-xs text-gray-400 text-center font-medium">
+            <div className="p-4 border-t border-gray-200 bg-gradient-to-t from-gray-50 to-white">
+              <div className="text-xs text-gray-400 text-center font-medium">
                 © 2024 NEO Admin Panel
               </div>
             </div>

@@ -1,7 +1,9 @@
 // app/(auth)/login.tsx
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from "expo-linear-gradient";
 import { Link, router } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
     ActivityIndicator,
     KeyboardAvoidingView,
@@ -16,9 +18,40 @@ import { useAuth } from "../../contexts/AuthContext";
 
 export default function LoginScreen() {
   const { login, isLoading } = useAuth();
-  const [email, setEmail] = useState("demo@neoapp.com");
-  const [password, setPassword] = useState("123456");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Sayfa yüklendiğinde son girilen bilgileri getir
+  useEffect(() => {
+    loadLastLoginCredentials();
+  }, []);
+
+  const loadLastLoginCredentials = async () => {
+    try {
+      const lastEmail = await AsyncStorage.getItem('last_login_email');
+      const lastPassword = await AsyncStorage.getItem('last_login_password');
+      
+      if (lastEmail) {
+        setEmail(lastEmail);
+      }
+      if (lastPassword) {
+        setPassword(lastPassword);
+      }
+    } catch (error) {
+      console.log('Son giriş bilgileri yüklenemedi:', error);
+    }
+  };
+
+  const saveLoginCredentials = async (email: string, password: string) => {
+    try {
+      await AsyncStorage.setItem('last_login_email', email);
+      await AsyncStorage.setItem('last_login_password', password);
+    } catch (error) {
+      console.log('Giriş bilgileri kaydedilemedi:', error);
+    }
+  };
 
   const handleLogin = async () => {
     setError(null);
@@ -28,6 +61,8 @@ export default function LoginScreen() {
     }
     try {
       await login(email, password);
+      // Başarılı girişte bilgileri kaydet
+      await saveLoginCredentials(email, password);
       router.replace("/home");
     } catch (e: any) {
       setError(e.message || "Giriş başarısız. Daha sonra tekrar deneyin.");
@@ -60,7 +95,7 @@ export default function LoginScreen() {
             <Text style={styles.label}>E-posta</Text>
             <TextInput
               style={styles.input}
-              placeholder="ornek@mail.com"
+              placeholder="demo@neoapp.com"
               placeholderTextColor="#64748b"
               keyboardType="email-address"
               autoCapitalize="none"
@@ -71,14 +106,26 @@ export default function LoginScreen() {
 
           <View style={styles.field}>
             <Text style={styles.label}>Şifre</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="••••••••"
-              placeholderTextColor="#64748b"
-              secureTextEntry
-              value={password}
-              onChangeText={setPassword}
-            />
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="123456"
+                placeholderTextColor="#64748b"
+                secureTextEntry={!showPassword}
+                value={password}
+                onChangeText={setPassword}
+              />
+              <TouchableOpacity
+                style={styles.eyeButton}
+                onPress={() => setShowPassword(!showPassword)}
+              >
+                <Ionicons
+                  name={showPassword ? "eye-off" : "eye"}
+                  size={20}
+                  color="#94a3b8"
+                />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {error && <Text style={styles.errorText}>{error}</Text>}
@@ -188,6 +235,28 @@ const styles = StyleSheet.create({
     color: "#e5e7eb",
     borderWidth: 1,
     borderColor: "rgba(148,163,184,0.5)",
+  },
+  passwordContainer: {
+    position: 'relative',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  passwordInput: {
+    flex: 1,
+    backgroundColor: "#020617",
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    paddingRight: 50, // Göz ikonu için yer bırak
+    fontSize: 14,
+    color: "#e5e7eb",
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.5)",
+  },
+  eyeButton: {
+    position: 'absolute',
+    right: 14,
+    padding: 4,
   },
   errorText: {
     color: "#f97373",

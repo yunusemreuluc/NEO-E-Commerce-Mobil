@@ -1,15 +1,15 @@
 // contexts/OrderContext.tsx
-import React, { createContext, ReactNode, useContext, useState } from 'react';
+import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
 import { orderService } from '../services/orderService';
 import { paymentService } from '../services/paymentService';
 import {
-  CreateOrderRequest,
-  CreatePaymentMethodRequest,
-  Order,
-  OrderItem,
-  OrderPayment,
-  OrderStatusHistory,
-  PaymentMethod
+    CreateOrderRequest,
+    CreatePaymentMethodRequest,
+    Order,
+    OrderItem,
+    OrderPayment,
+    OrderStatusHistory,
+    PaymentMethod
 } from '../types/Order';
 import { useAuth } from './AuthContext';
 
@@ -60,7 +60,20 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
   const [paymentMethodsLoading, setPaymentMethodsLoading] = useState(false);
   const [paymentMethodsError, setPaymentMethodsError] = useState<string | null>(null);
   
-  const { user } = useAuth() || { user: null };
+  const { user } = useAuth();
+
+  // Kullanıcı değiştiğinde verileri temizle
+  useEffect(() => {
+    if (!user) {
+      console.log('👤 OrderContext: Kullanıcı çıkış yaptı, veriler temizleniyor');
+      setOrders([]);
+      setPaymentMethods([]);
+      setOrdersError(null);
+      setPaymentMethodsError(null);
+    } else {
+      console.log('👤 OrderContext: Kullanıcı giriş yaptı:', user.name);
+    }
+  }, [user]);
 
   const clearErrors = () => {
     setOrdersError(null);
@@ -69,7 +82,10 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
 
   // Siparişleri yükle
   const loadOrders = async (page: number = 1, limit: number = 10) => {
-    if (!user) return;
+    if (!user) {
+      setOrders([]); // Kullanıcı yoksa siparişleri temizle
+      return;
+    }
     
     try {
       setOrdersLoading(true);
@@ -89,16 +105,24 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
     try {
       setOrdersError(null);
       
+      console.log('🏪 OrderContext.createOrder başladı');
+      console.log('📋 Order data:', orderData);
+      
       const result = await orderService.createOrder(orderData);
       
+      console.log('🎯 OrderService sonucu:', result);
+      
       if (result.success && result.data) {
+        console.log('✅ Sipariş başarılı, siparişler yeniden yükleniyor...');
         // Siparişleri yeniden yükle
         await loadOrders();
         return result.data;
       } else {
+        console.error('❌ Sipariş başarısız:', result);
         throw new Error(result.message || 'Sipariş oluşturulamadı');
       }
     } catch (error) {
+      console.error('💥 OrderContext createOrder hatası:', error);
       const errorMessage = error instanceof Error ? error.message : 'Sipariş oluşturulurken bir hata oluştu';
       setOrdersError(errorMessage);
       throw new Error(errorMessage);
@@ -135,7 +159,10 @@ export const OrderProvider: React.FC<OrderProviderProps> = ({ children }) => {
 
   // Ödeme yöntemlerini yükle
   const loadPaymentMethods = async () => {
-    if (!user) return;
+    if (!user) {
+      setPaymentMethods([]); // Kullanıcı yoksa ödeme yöntemlerini temizle
+      return;
+    }
     
     try {
       setPaymentMethodsLoading(true);

@@ -3,8 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://10.241.81.212:4000";
+import { API_BASE_URL } from "../../config/api";
 
 type ProductRow = {
   id: number;
@@ -17,6 +16,7 @@ type ProductRow = {
   image_url: string | null;
   primary_image?: string;
   price: number;
+  old_price?: number;
   sale_price?: number;
   discount_percentage?: number;
   stock_quantity?: number;
@@ -323,19 +323,39 @@ export default function ProductsPage() {
 
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="space-y-1">
-                      <div className="font-semibold text-gray-900">
-                        ₺{Number(p.price).toFixed(2)}
-                      </div>
-                      {p.sale_price && p.sale_price !== p.price && (
-                        <div className="text-sm">
-                          <span className="text-green-600 font-medium">
-                            ₺{Number(p.sale_price).toFixed(2)}
-                          </span>
-                          {p.discount_percentage && (
-                            <span className="bg-red-100 text-red-800 px-1 py-0.5 rounded text-xs font-medium ml-1">
-                              -%{p.discount_percentage}
+                      {/* İndirim varsa özel gösterim */}
+                      {p.discount_percentage && Number(p.discount_percentage) > 0 ? (
+                        <div className="space-y-1">
+                          {/* İndirim rozeti */}
+                          <div className="flex items-center gap-2">
+                            <span className="bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs font-bold">
+                              -%{Number(p.discount_percentage).toFixed(0)}
                             </span>
-                          )}
+                            <span className="text-xs text-gray-500">İndirim</span>
+                          </div>
+                          
+                          {/* Fiyat değişimi */}
+                          <div className="text-sm">
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-500 line-through text-xs">
+                                ₺{(Number(p.price) / (1 - Number(p.discount_percentage) / 100)).toFixed(2)}
+                              </span>
+                              <span className="text-gray-400">→</span>
+                              <span className="font-semibold text-green-600">
+                                ₺{Number(p.price).toFixed(2)}
+                              </span>
+                            </div>
+                          </div>
+                          
+                          {/* Tasarruf miktarı */}
+                          <div className="text-xs text-green-600 font-medium">
+                            💰 ₺{((Number(p.price) / (1 - Number(p.discount_percentage) / 100)) - Number(p.price)).toFixed(2)} tasarruf
+                          </div>
+                        </div>
+                      ) : (
+                        /* İndirim yoksa normal fiyat */
+                        <div className="font-semibold text-gray-900">
+                          ₺{Number(p.price).toFixed(2)}
                         </div>
                       )}
                     </div>

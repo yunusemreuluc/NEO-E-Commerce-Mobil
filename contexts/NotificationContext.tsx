@@ -1,4 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { getAuthHeaders } from '../api';
+import { API_BASE_URL } from '../config/api';
+import { useAuth } from './AuthContext';
 
 interface Notification {
   id: number;
@@ -32,20 +35,35 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(false);
+  const { user } = useAuth();
 
   // Okunmamış bildirim sayısı
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
+  // Kullanıcı değiştiğinde bildirimleri temizle
+  useEffect(() => {
+    if (!user) {
+      console.log('👤 NotificationContext: Kullanıcı çıkış yaptı, bildirimler temizleniyor');
+      setNotifications([]);
+    } else {
+      console.log('👤 NotificationContext: Kullanıcı giriş yaptı, bildirimler yükleniyor:', user.name);
+      fetchNotifications();
+    }
+  }, [user]);
+
   // Bildirimleri getir
   const fetchNotifications = async () => {
+    if (!user) {
+      setNotifications([]); // Kullanıcı yoksa bildirimleri temizle
+      return;
+    }
+
     try {
       setLoading(true);
       
-      // Geçici olarak token olmadan test et
-      const response = await fetch('http://10.241.81.212:4000/notifications', {
-        headers: {
-          'Content-Type': 'application/json'
-        }
+      const headers = await getAuthHeaders();
+      const response = await fetch(`${API_BASE_URL}/api/notifications`, {
+        headers
       });
 
       if (response.ok) {
@@ -53,10 +71,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         if (data.success && Array.isArray(data.data)) {
           setNotifications(data.data);
         }
+      } else if (response.status === 401) {
+        // Token geçersizse bildirimleri temizle
+        setNotifications([]);
       }
     } catch (error) {
+      console.error('Bildirim getirme hatası:', error);
       // Network hatası durumunda sessizce devam et
-      // console.error('Bildirim getirme hatası:', error);
     } finally {
       setLoading(false);
     }
@@ -64,12 +85,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   // Bildirimi okundu olarak işaretle
   const markAsRead = async (id: number) => {
+    if (!user) return;
+
     try {
-      const response = await fetch(`http://10.241.81.212:4000/notifications/${id}/read`, {
+      const headers = await getAuthHeaders();
+      const response = await fetch(`${API_BASE_URL}/api/notifications/${id}/read`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json'
-        }
+        headers
       });
 
       if (response.ok) {
@@ -78,19 +100,19 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         );
       }
     } catch (error) {
-      // Network hatası durumunda sessizce devam et
-      // console.error('Bildirim okundu işaretleme hatası:', error);
+      console.error('Bildirim okundu işaretleme hatası:', error);
     }
   };
 
   // Tüm bildirimleri okundu olarak işaretle
   const markAllAsRead = async () => {
+    if (!user) return;
+
     try {
-      const response = await fetch('http://10.241.81.212:4000/notifications/read-all', {
+      const headers = await getAuthHeaders();
+      const response = await fetch(`${API_BASE_URL}/api/notifications/read-all`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json'
-        }
+        headers
       });
 
       if (response.ok) {
@@ -99,34 +121,31 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         );
       }
     } catch (error) {
-      // Network hatası durumunda sessizce devam et
-      // console.error('Tüm bildirimler okundu işaretleme hatası:', error);
+      console.error('Tüm bildirimler okundu işaretleme hatası:', error);
     }
   };
 
   // Bildirimi sil
   const deleteNotification = async (id: number) => {
+    if (!user) return;
+
     try {
-      const response = await fetch(`http://10.241.81.212:4000/notifications/${id}`, {
+      const headers = await getAuthHeaders();
+      const response = await fetch(`${API_BASE_URL}/api/notifications/${id}`, {
         method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json'
-        }
+        headers
       });
 
       if (response.ok) {
         setNotifications(prev => prev.filter(n => n.id !== id));
       }
     } catch (error) {
-      // Network hatası durumunda sessizce devam et
-      // console.error('Bildirim silme hatası:', error);
+      console.error('Bildirim silme hatası:', error);
     }
   };
 
   // Sayfa yüklendiğinde bildirimleri getir (sadece bir kez)
-  useEffect(() => {
-    fetchNotifications();
-  }, []);
+  // useEffect kaldırıldı - artık kullanıcı değişikliğinde otomatik yükleniyor
 
   return (
     <NotificationContext.Provider value={{

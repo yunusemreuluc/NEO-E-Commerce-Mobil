@@ -1,4 +1,5 @@
 // app/(auth)/register.tsx
+import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from "expo-linear-gradient";
 import { Link, router } from "expo-router";
 import { useState } from "react";
@@ -17,17 +18,36 @@ import { useAuth } from "../../contexts/AuthContext";
 export default function RegisterScreen() {
   const { register, isLoading } = useAuth();
 
-  const [name, setName] = useState("NEO Kullanıcısı");
-  const [email, setEmail] = useState("demo@neoapp.com"); // ✅ düzeltildi
-  const [password, setPassword] = useState("123456");
+  // Kayıt formunda tüm alanlar boş başlasın
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleRegister = async () => {
     setError(null);
-    if (!name || !email || !password) {
+    
+    // Boş alan kontrolü
+    if (!name || !email || !password || !confirmPassword) {
       setError("Lütfen tüm alanları doldurun.");
       return;
     }
+    
+    // Şifre uzunluk kontrolü
+    if (password.length < 6) {
+      setError("Şifre en az 6 karakter olmalıdır.");
+      return;
+    }
+    
+    // Şifre eşleşme kontrolü
+    if (password !== confirmPassword) {
+      setError("Şifreler eşleşmiyor. Lütfen tekrar kontrol edin.");
+      return;
+    }
+    
     try {
       await register(name, email, password);
       router.replace("/home");
@@ -63,7 +83,7 @@ export default function RegisterScreen() {
             <Text style={styles.label}>Ad Soyad</Text>
             <TextInput
               style={styles.input}
-              placeholder="Ad Soyad"
+              placeholder="Adınız Soyadınız"
               placeholderTextColor="#64748b"
               value={name}
               onChangeText={setName}
@@ -85,14 +105,66 @@ export default function RegisterScreen() {
 
           <View style={styles.field}>
             <Text style={styles.label}>Şifre</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="••••••••"
-              placeholderTextColor="#64748b"
-              secureTextEntry
-              value={password}
-              onChangeText={setPassword}
-            />
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="En az 6 karakter"
+                placeholderTextColor="#64748b"
+                secureTextEntry={!showPassword}
+                value={password}
+                onChangeText={setPassword}
+              />
+              <TouchableOpacity
+                style={styles.eyeButton}
+                onPress={() => setShowPassword(!showPassword)}
+              >
+                <Ionicons
+                  name={showPassword ? "eye-off" : "eye"}
+                  size={20}
+                  color="#94a3b8"
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={styles.field}>
+            <Text style={styles.label}>Şifre Tekrarı</Text>
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Şifrenizi tekrar girin"
+                placeholderTextColor="#64748b"
+                secureTextEntry={!showConfirmPassword}
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+              />
+              <TouchableOpacity
+                style={styles.eyeButton}
+                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+              >
+                <Ionicons
+                  name={showConfirmPassword ? "eye-off" : "eye"}
+                  size={20}
+                  color="#94a3b8"
+                />
+              </TouchableOpacity>
+            </View>
+            {/* Şifre eşleşme durumu göstergesi */}
+            {confirmPassword.length > 0 && (
+              <View style={styles.passwordMatchContainer}>
+                {password === confirmPassword ? (
+                  <View style={styles.passwordMatchSuccess}>
+                    <Ionicons name="checkmark-circle" size={16} color="#10b981" />
+                    <Text style={styles.passwordMatchText}>Şifreler eşleşiyor</Text>
+                  </View>
+                ) : (
+                  <View style={styles.passwordMatchError}>
+                    <Ionicons name="close-circle" size={16} color="#ef4444" />
+                    <Text style={styles.passwordMatchTextError}>Şifreler eşleşmiyor</Text>
+                  </View>
+                )}
+              </View>
+            )}
           </View>
 
           {error && <Text style={styles.errorText}>{error}</Text>}
@@ -191,6 +263,51 @@ const styles = StyleSheet.create({
     color: "#e5e7eb",
     borderWidth: 1,
     borderColor: "rgba(148,163,184,0.5)",
+  },
+  passwordContainer: {
+    position: 'relative',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  passwordInput: {
+    flex: 1,
+    backgroundColor: "#020617",
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    paddingRight: 50, // Göz ikonu için yer bırak
+    fontSize: 14,
+    color: "#e5e7eb",
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.5)",
+  },
+  eyeButton: {
+    position: 'absolute',
+    right: 14,
+    padding: 4,
+  },
+  passwordMatchContainer: {
+    marginTop: 8,
+  },
+  passwordMatchSuccess: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  passwordMatchError: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  passwordMatchText: {
+    fontSize: 12,
+    color: '#10b981',
+    fontWeight: '500',
+  },
+  passwordMatchTextError: {
+    fontSize: 12,
+    color: '#ef4444',
+    fontWeight: '500',
   },
   errorText: {
     color: "#f97373",

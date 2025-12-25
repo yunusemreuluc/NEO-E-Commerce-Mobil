@@ -96,22 +96,6 @@ export default function OrdersScreen() {
         onPress={() => handleOrderPress(order)}
         activeOpacity={0.95}
       >
-        {/* Üst Kısım - Durum ve Tarih */}
-        <View style={styles.cardHeader}>
-          <View style={[styles.statusIndicator, { backgroundColor: getStatusColor(order.status) }]} />
-          <View style={styles.headerInfo}>
-            <Text style={styles.orderNumber}>#{order.order_number}</Text>
-            <Text style={styles.statusTextLarge}>{getStatusText(order.status)}</Text>
-          </View>
-          <Text style={styles.orderDate}>
-            {new Date(order.created_at).toLocaleDateString('tr-TR', {
-              day: '2-digit',
-              month: '2-digit',
-              year: 'numeric'
-            })}
-          </Text>
-        </View>
-
         {/* Ana İçerik */}
         <View style={styles.cardContent}>
           {/* Sol Taraf - Ürün Görseli */}
@@ -338,42 +322,9 @@ const styles = StyleSheet.create({
     elevation: 6,
     overflow: 'hidden',
   },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    paddingBottom: 12,
-    backgroundColor: '#FAFBFC',
-  },
-  statusIndicator: {
-    width: 4,
-    height: 40,
-    borderRadius: 2,
-    marginRight: 12,
-  },
-  headerInfo: {
-    flex: 1,
-  },
-  orderNumber: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#1a1a1a',
-    marginBottom: 2,
-  },
-  statusTextLarge: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#666',
-  },
-  orderDate: {
-    fontSize: 12,
-    color: '#999',
-    fontWeight: '500',
-  },
   cardContent: {
     flexDirection: 'row',
     padding: 16,
-    paddingTop: 0,
   },
   productSection: {
     flex: 1,

@@ -201,10 +201,17 @@ export default function OrderDetailScreen() {
           <Text style={styles.sectionTitle}>Ürünler</Text>
           {items.map((item) => (
             <View key={item.id} style={styles.productItem}>
-              <Image
-                source={{ uri: item.product_image || 'https://via.placeholder.com/60' }}
-                style={styles.productImage}
-              />
+              {item.product_image ? (
+                <Image
+                  source={{ uri: item.product_image }}
+                  style={styles.productImage}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View style={styles.placeholderImage}>
+                  <Ionicons name="cube-outline" size={24} color="#CCCCCC" />
+                </View>
+              )}
               <View style={styles.productInfo}>
                 <Text style={styles.productName}>{item.product_name}</Text>
                 <Text style={styles.productPrice}>₺{Number(item.unit_price || 0).toFixed(2)}</Text>
@@ -466,6 +473,18 @@ const styles = StyleSheet.create({
     height: 60,
     borderRadius: 8,
     marginRight: 12,
+  },
+  placeholderImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    marginRight: 12,
+    backgroundColor: '#F5F5F5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderStyle: 'dashed',
   },
   productInfo: {
     flex: 1,

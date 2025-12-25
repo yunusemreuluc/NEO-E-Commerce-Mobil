@@ -1,9 +1,11 @@
 // get-fresh-token.js
 const fetch = require('node-fetch');
 
+const { API_BASE_URL } = require('./config/test-config');
+
 async function getFreshToken() {
   try {
-    const response = await fetch('http://10.241.81.212:4000/auth/login', {
+    const response = await fetch(`${API_BASE_URL}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -22,7 +24,7 @@ async function getFreshToken() {
     console.log('🔑 Token:', data.token);
     
     // Hemen test et
-    const testResponse = await fetch('http://10.241.81.212:4000/addresses', {
+    const testResponse = await fetch(`${API_BASE_URL}/addresses`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',

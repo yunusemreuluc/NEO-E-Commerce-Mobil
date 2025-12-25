@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { API_BASE_URL } from '../config/api';
 
 export default function ImageUploadTest() {
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
@@ -101,7 +102,7 @@ export default function ImageUploadTest() {
       });
 
       // URL tabanlı sistem kullan
-      const response = await fetch('http://10.241.81.212:4000/comments/url-review-images', {
+      const response = await fetch(`${API_BASE_URL}/comments/url-review-images`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

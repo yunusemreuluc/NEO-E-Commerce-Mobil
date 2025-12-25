@@ -4,16 +4,18 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  Image,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Image,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { OPEN_WEATHER_API_KEY } from "../../../constants/Weather"; // 🔥 DİKKAT: 3 ../
+import { OPEN_WEATHER_API_KEY } from "../../../constants/Weather";
+import { useAuth } from "../../../contexts/AuthContext";
+import { useOrder } from "../../../contexts/OrderContext";
 
 // Başlangıç şehri
 const DEFAULT_CITY = "Istanbul";
@@ -31,12 +33,41 @@ type WeatherData = {
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const { user, logout } = useAuth();
+  const { orders } = useOrder();
 
   const [city, setCity] = useState(DEFAULT_CITY);
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [loadingWeather, setLoadingWeather] = useState(false);
   const [weatherError, setWeatherError] = useState<string | null>(null);
   const [cityPickerVisible, setCityPickerVisible] = useState(false);
+
+  // Kullanıcı giriş yapmamışsa login sayfasına yönlendir
+  useEffect(() => {
+    if (!user) {
+      router.replace('/(auth)/login');
+    }
+  }, [user]);
+
+  // Kullanıcı bilgileri yoksa loading göster
+  if (!user) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#FF3B30" />
+          <Text style={styles.loadingText}>Yükleniyor...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Kullanıcının adının ilk harfini al
+  const getUserInitial = () => {
+    return user.name ? user.name.charAt(0).toUpperCase() : 'U';
+  };
+
+  // Sipariş sayısını hesapla
+  const orderCount = orders?.length || 0;
 
   const fetchWeather = async (cityName: string) => {
     try {
@@ -219,29 +250,32 @@ export default function ProfileScreen() {
         <View style={styles.profileCard}>
           <View style={styles.profileRow}>
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>Y</Text>
+              <Text style={styles.avatarText}>{getUserInitial()}</Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.profileName}>Yunus (Örnek Kullanıcı)</Text>
-              <Text style={styles.profileEmail}>yunus@example.com</Text>
+              <Text style={styles.profileName}>{user.name}</Text>
+              <Text style={styles.profileEmail}>{user.email}</Text>
             </View>
 
-            <TouchableOpacity style={styles.editButton}>
+            <TouchableOpacity 
+              style={styles.editButton}
+              onPress={() => router.push('/(tabs)/profile/settings')}
+            >
               <Ionicons name="create-outline" size={18} color="#FF3B30" />
             </TouchableOpacity>
           </View>
 
           <View style={styles.profileStats}>
             <View style={styles.statBox}>
-              <Text style={styles.statNumber}>12</Text>
+              <Text style={styles.statNumber}>{orderCount}</Text>
               <Text style={styles.statLabel}>Sipariş</Text>
             </View>
             <View style={styles.statBox}>
-              <Text style={styles.statNumber}>4</Text>
+              <Text style={styles.statNumber}>-</Text>
               <Text style={styles.statLabel}>Favori</Text>
             </View>
             <View style={styles.statBox}>
-              <Text style={styles.statNumber}>3</Text>
+              <Text style={styles.statNumber}>-</Text>
               <Text style={styles.statLabel}>Kupon</Text>
             </View>
           </View>
@@ -292,6 +326,19 @@ export default function ProfileScreen() {
             <Ionicons name="settings-outline" size={20} color="#111" />
             <Text style={styles.rowButtonText}>Ayarlar</Text>
             <Ionicons name="chevron-forward" size={18} color="#999" />
+          </TouchableOpacity>
+
+          {/* Çıkış Yap */}
+          <TouchableOpacity
+            style={[styles.rowButton, styles.logoutButton]}
+            onPress={async () => {
+              await logout();
+              router.replace('/(auth)/login');
+            }}
+          >
+            <Ionicons name="log-out-outline" size={20} color="#FF3B30" />
+            <Text style={[styles.rowButtonText, styles.logoutText]}>Çıkış Yap</Text>
+            <Ionicons name="chevron-forward" size={18} color="#FF3B30" />
           </TouchableOpacity>
         </View>
 
@@ -506,6 +553,28 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 10,
     fontSize: 14,
+  },
+
+  /* Loading container */
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 14,
+    color: '#666',
+  },
+
+  /* Logout button */
+  logoutButton: {
+    borderBottomWidth: 0,
+    marginTop: 8,
+  },
+  logoutText: {
+    color: '#FF3B30',
+    fontWeight: '500',
   },
 
   /* Şehir seçme overlay */

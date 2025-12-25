@@ -1,195 +1,333 @@
-import { Router } from 'express';
-import jwt from 'jsonwebtoken';
-import pool from '../db';
+import express, { Request } from 'express';
+import { ResultSetHeader, RowDataPacket } from 'mysql2';
+import { db } from '../db';
+import { authenticateToken } from '../middleware/auth';
 
-const router = Router();
+interface AuthRequest extends Request {
+  user?: {
+    id: number;
+    email: string;
+    role: string;
+  };
+}
 
-const JWT_SECRET = process.env.JWT_SECRET || 'neo-secret-key-2024';
-
-// Auth middleware
-const authenticateToken = (req: any, res: any, next: any) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-
-  if (!token) {
-    return res.status(401).json({ message: 'Giriş yapmanız gerekiyor' });
-  }
-
-  jwt.verify(token, JWT_SECRET, (err: any, user: any) => {
-    if (err) {
-      return res.status(403).json({ message: 'Geçersiz token' });
-    }
-    req.user = user;
-    next();
-  });
-};
+const router = express.Router();
 
 // Admin middleware
-const requireAdmin = (req: any, res: any, next: any) => {
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ message: 'Admin yetkisi gerekli' });
+const requireAdmin = (req: AuthRequest, res: any, next: any) => {
+  if (!req.user || req.user.role !== 'admin') {
+    return res.status(403).json({ 
+      success: false,
+      message: 'Admin yetkisi gerekli' 
+    });
   }
   next();
 };
 
 // Kullanıcıları listele
-router.get('/', authenticateToken, requireAdmin, async (req, res) => {
+router.get('/', authenticateToken, requireAdmin, async (req: AuthRequest, res) => {
   try {
-    const { page = 1, limit = 20, search } = req.query;
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const search = req.query.search as string;
+    const offset = (page - 1) * limit;
     
-    let whereClause = '';
-    let queryParams = [];
+    let whereClause = 'WHERE 1=1';
+    const queryParams: any[] = [];
 
     if (search) {
-      whereClause = 'WHERE name LIKE ? OR email LIKE ?';
+      whereClause += ' AND (name LIKE ? OR email LIKE ?)';
       queryParams.push(`%${search}%`, `%${search}%`);
     }
 
-    const offset = (parseInt(page as string) - 1) * parseInt(limit as string);
-    queryParams.push(parseInt(limit as string), offset);
-
-    const [users] = await pool.query(`
-      SELECT id, name, email, role, is_active, created_at
+    // Kullanıcıları getir
+    const [users] = await db.execute(`
+      SELECT id, name, email, role, is_active, created_at,
+             (SELECT COUNT(*) FROM orders WHERE user_id = users.id) as order_count,
+             (SELECT COUNT(*) FROM product_reviews WHERE user_id = users.id) as review_count
       FROM users
       ${whereClause}
       ORDER BY created_at DESC
-      LIMIT ? OFFSET ?
-    `, queryParams);
+      LIMIT ${limit} OFFSET ${offset}
+    `, queryParams) as [RowDataPacket[], any];
 
     // Toplam sayı
-    const countParams = queryParams.slice(0, -2);
-    const [countResult] = await pool.query(`
+    const [countResult] = await db.execute(`
       SELECT COUNT(*) as total
       FROM users
       ${whereClause}
-    `, countParams);
+    `, queryParams) as [RowDataPacket[], any];
 
-    const total = (countResult as any[])[0].total;
+    const total = countResult[0].total;
 
     res.json({
-      users,
-      pagination: {
-        page: parseInt(page as string),
-        limit: parseInt(limit as string),
-        total,
-        pages: Math.ceil(total / parseInt(limit as string))
+      success: true,
+      data: {
+        users,
+        pagination: {
+          page,
+          limit,
+          total,
+          pages: Math.ceil(total / limit)
+        }
       }
     });
 
   } catch (error) {
-    console.error('Get users error:', error);
-    res.status(500).json({ message: 'Kullanıcılar yüklenirken hata oluştu' });
+    console.error('Kullanıcı listesi hatası:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Kullanıcılar yüklenirken hata oluştu' 
+    });
   }
 });
 
 // Kullanıcı detayı
-router.get('/:userId', authenticateToken, requireAdmin, async (req, res) => {
+router.get('/:userId', authenticateToken, requireAdmin, async (req: AuthRequest, res) => {
   try {
     const userId = parseInt(req.params.userId);
 
-    const [users] = await pool.query(`
+    const [users] = await db.execute(`
       SELECT id, name, email, role, is_active, created_at
       FROM users
       WHERE id = ?
-    `, [userId]);
+    `, [userId]) as [RowDataPacket[], any];
 
-    const user = (users as any[])[0];
+    const user = users[0];
     if (!user) {
-      return res.status(404).json({ message: 'Kullanıcı bulunamadı' });
+      return res.status(404).json({ 
+        success: false,
+        message: 'Kullanıcı bulunamadı' 
+      });
     }
 
-    // Kullanıcının yorum istatistikleri
-    const [reviewStats] = await pool.query(`
+    // Kullanıcının istatistikleri
+    const [orderStats] = await db.execute(`
+      SELECT 
+        COUNT(*) as total_orders,
+        SUM(total_amount) as total_spent
+      FROM orders
+      WHERE user_id = ?
+    `, [userId]) as [RowDataPacket[], any];
+
+    const [reviewStats] = await db.execute(`
       SELECT 
         COUNT(*) as total_reviews,
-        COUNT(CASE WHEN status = 'approved' THEN 1 END) as approved_reviews,
-        COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_reviews,
-        COUNT(CASE WHEN status = 'rejected' THEN 1 END) as rejected_reviews,
         AVG(rating) as avg_rating
-      FROM reviews
+      FROM product_reviews
       WHERE user_id = ?
-    `, [userId]);
+    `, [userId]) as [RowDataPacket[], any];
 
-    const stats = (reviewStats as any[])[0];
+    const stats = {
+      total_orders: orderStats[0]?.total_orders || 0,
+      total_spent: parseFloat(orderStats[0]?.total_spent || 0),
+      total_reviews: reviewStats[0]?.total_reviews || 0,
+      avg_rating: reviewStats[0]?.avg_rating ? parseFloat(reviewStats[0].avg_rating).toFixed(1) : 0
+    };
 
     res.json({
-      user,
-      stats: {
-        total_reviews: stats.total_reviews || 0,
-        approved_reviews: stats.approved_reviews || 0,
-        pending_reviews: stats.pending_reviews || 0,
-        rejected_reviews: stats.rejected_reviews || 0,
-        avg_rating: stats.avg_rating ? parseFloat(stats.avg_rating).toFixed(1) : 0
-      }
+      success: true,
+      data: { user, stats }
     });
 
   } catch (error) {
-    console.error('Get user detail error:', error);
-    res.status(500).json({ message: 'Kullanıcı detayı yüklenirken hata oluştu' });
+    console.error('Kullanıcı detay hatası:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Kullanıcı detayı yüklenirken hata oluştu' 
+    });
   }
 });
 
 // Kullanıcı durumunu güncelle (aktif/pasif)
-router.patch('/:userId/status', authenticateToken, requireAdmin, async (req, res) => {
+router.patch('/:userId/status', authenticateToken, requireAdmin, async (req: AuthRequest, res) => {
   try {
     const userId = parseInt(req.params.userId);
     const { is_active } = req.body;
 
     if (typeof is_active !== 'boolean') {
-      return res.status(400).json({ message: 'is_active boolean değer olmalı' });
+      return res.status(400).json({ 
+        success: false,
+        message: 'is_active boolean değer olmalı' 
+      });
     }
 
     // Kendi hesabını devre dışı bırakmasını engelle
-    if ((req as any).user.userId === userId && !is_active) {
-      return res.status(400).json({ message: 'Kendi hesabınızı devre dışı bırakamazsınız' });
+    if (req.user?.id === userId && !is_active) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Kendi hesabınızı devre dışı bırakamazsınız' 
+      });
     }
 
-    const [result] = await pool.query(
+    const [result] = await db.execute(
       'UPDATE users SET is_active = ? WHERE id = ?',
       [is_active, userId]
-    );
+    ) as [ResultSetHeader, any];
 
-    if ((result as any).affectedRows === 0) {
-      return res.status(404).json({ message: 'Kullanıcı bulunamadı' });
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Kullanıcı bulunamadı' 
+      });
     }
 
-    res.json({ message: 'Kullanıcı durumu güncellendi' });
+    res.json({ 
+      success: true,
+      message: 'Kullanıcı durumu güncellendi' 
+    });
 
   } catch (error) {
-    console.error('Update user status error:', error);
-    res.status(500).json({ message: 'Kullanıcı durumu güncellenirken hata oluştu' });
+    console.error('Kullanıcı durumu güncelleme hatası:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Kullanıcı durumu güncellenirken hata oluştu' 
+    });
   }
 });
 
 // Kullanıcı rolünü güncelle
-router.patch('/:userId/role', authenticateToken, requireAdmin, async (req, res) => {
+router.patch('/:userId/role', authenticateToken, requireAdmin, async (req: AuthRequest, res) => {
   try {
     const userId = parseInt(req.params.userId);
     const { role } = req.body;
 
     if (!['user', 'admin'].includes(role)) {
-      return res.status(400).json({ message: 'Rol user veya admin olmalı' });
+      return res.status(400).json({ 
+        success: false,
+        message: 'Rol user veya admin olmalı' 
+      });
     }
 
     // Kendi rolünü değiştirmesini engelle
-    if ((req as any).user.userId === userId) {
-      return res.status(400).json({ message: 'Kendi rolünüzü değiştiremezsiniz' });
+    if (req.user?.id === userId) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Kendi rolünüzü değiştiremezsiniz' 
+      });
     }
 
-    const [result] = await pool.query(
+    const [result] = await db.execute(
       'UPDATE users SET role = ? WHERE id = ?',
       [role, userId]
-    );
+    ) as [ResultSetHeader, any];
 
-    if ((result as any).affectedRows === 0) {
-      return res.status(404).json({ message: 'Kullanıcı bulunamadı' });
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Kullanıcı bulunamadı' 
+      });
     }
 
-    res.json({ message: 'Kullanıcı rolü güncellendi' });
+    res.json({ 
+      success: true,
+      message: 'Kullanıcı rolü güncellendi' 
+    });
 
   } catch (error) {
-    console.error('Update user role error:', error);
-    res.status(500).json({ message: 'Kullanıcı rolü güncellenirken hata oluştu' });
+    console.error('Kullanıcı rolü güncelleme hatası:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Kullanıcı rolü güncellenirken hata oluştu' 
+    });
+  }
+});
+
+// Kullanıcı sil (gerçek silme)
+router.delete('/:userId', authenticateToken, requireAdmin, async (req: AuthRequest, res) => {
+  const userId = parseInt(req.params.userId);
+
+  if (!userId || isNaN(userId)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Geçerli bir kullanıcı ID gerekli'
+    });
+  }
+
+  // Kendi hesabını silmesini engelle
+  if (req.user?.id === userId) {
+    return res.status(400).json({
+      success: false,
+      message: 'Kendi hesabınızı silemezsiniz'
+    });
+  }
+
+  const connection = await db.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    // Önce kullanıcının var olup olmadığını kontrol et
+    const [userCheck] = await connection.execute(
+      'SELECT id, name, email FROM users WHERE id = ?',
+      [userId]
+    ) as [RowDataPacket[], any];
+
+    if (userCheck.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({
+        success: false,
+        message: 'Kullanıcı bulunamadı'
+      });
+    }
+
+    const userName = userCheck[0].name;
+    const userEmail = userCheck[0].email;
+
+    // İlişkili tabloları temizle
+    await connection.execute('DELETE FROM product_reviews WHERE user_id = ?', [userId]);
+    await connection.execute('DELETE FROM addresses WHERE user_id = ?', [userId]);
+    await connection.execute('DELETE FROM payment_methods WHERE user_id = ?', [userId]);
+    
+    // Siparişleri ve ilişkili verileri sil
+    const [userOrders] = await connection.execute(
+      'SELECT id FROM orders WHERE user_id = ?',
+      [userId]
+    ) as [RowDataPacket[], any];
+
+    for (const order of userOrders) {
+      await connection.execute('DELETE FROM order_status_history WHERE order_id = ?', [order.id]);
+      await connection.execute('DELETE FROM order_payments WHERE order_id = ?', [order.id]);
+      await connection.execute('DELETE FROM order_items WHERE order_id = ?', [order.id]);
+    }
+    
+    await connection.execute('DELETE FROM orders WHERE user_id = ?', [userId]);
+    
+    // Ana kullanıcıyı sil
+    const [deleteResult] = await connection.execute(
+      'DELETE FROM users WHERE id = ?',
+      [userId]
+    ) as [ResultSetHeader, any];
+
+    if (deleteResult.affectedRows === 0) {
+      await connection.rollback();
+      return res.status(404).json({
+        success: false,
+        message: 'Kullanıcı silinemedi'
+      });
+    }
+
+    await connection.commit();
+
+    res.json({
+      success: true,
+      message: `Kullanıcı "${userName}" (${userEmail}) başarıyla silindi`,
+      data: {
+        deleted_user_id: userId,
+        deleted_user_name: userName,
+        deleted_user_email: userEmail
+      }
+    });
+
+  } catch (error) {
+    await connection.rollback();
+    console.error('Kullanıcı silme hatası:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Kullanıcı silinirken bir hata oluştu'
+    });
+  } finally {
+    connection.release();
   }
 });
 

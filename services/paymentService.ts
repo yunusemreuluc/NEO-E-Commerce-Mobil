@@ -10,7 +10,7 @@ export const paymentService = {
   // Ödeme yöntemlerini listele
   async getPaymentMethods(): Promise<PaymentMethod[]> {
     const headers = await getAuthHeaders();
-    const response = await fetch(`${API_BASE_URL}/payment-methods`, {
+    const response = await fetch(`${API_BASE_URL}/api/payment-methods`, {
       method: 'GET',
       headers,
     });
@@ -27,7 +27,7 @@ export const paymentService = {
   // Yeni ödeme yöntemi ekle
   async addPaymentMethod(paymentData: CreatePaymentMethodRequest): Promise<CreatePaymentMethodResponse> {
     const headers = await getAuthHeaders();
-    const response = await fetch(`${API_BASE_URL}/payment-methods`, {
+    const response = await fetch(`${API_BASE_URL}/api/payment-methods`, {
       method: 'POST',
       headers,
       body: JSON.stringify(paymentData),
@@ -46,7 +46,7 @@ export const paymentService = {
   async setDefaultPaymentMethod(paymentMethodId: number): Promise<void> {
     const headers = await getAuthHeaders();
     const response = await fetch(
-      `${API_BASE_URL}/payment-methods/${paymentMethodId}/set-default`,
+      `${API_BASE_URL}/api/payment-methods/${paymentMethodId}/set-default`,
       {
         method: 'PATCH',
         headers,
@@ -63,7 +63,7 @@ export const paymentService = {
   // Ödeme yöntemini sil
   async deletePaymentMethod(paymentMethodId: number): Promise<void> {
     const headers = await getAuthHeaders();
-    const response = await fetch(`${API_BASE_URL}/payment-methods/${paymentMethodId}`, {
+    const response = await fetch(`${API_BASE_URL}/api/payment-methods/${paymentMethodId}`, {
       method: 'DELETE',
       headers,
     });

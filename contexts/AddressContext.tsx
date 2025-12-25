@@ -37,7 +37,10 @@ export const AddressProvider: React.FC<AddressProviderProps> = ({ children }) =>
   const clearError = () => setError(null);
 
   const loadAddresses = async () => {
-    if (!user) return;
+    if (!user) {
+      setAddresses([]); // Kullanıcı yoksa adresleri temizle
+      return;
+    }
     
     try {
       setLoading(true);
@@ -118,8 +121,10 @@ export const AddressProvider: React.FC<AddressProviderProps> = ({ children }) =>
   // Kullanıcı giriş yaptığında adresleri yükle
   useEffect(() => {
     if (user) {
+      console.log('👤 AddressContext: Kullanıcı giriş yaptı, adresler yükleniyor:', user.name);
       loadAddresses();
     } else {
+      console.log('👤 AddressContext: Kullanıcı çıkış yaptı, adresler temizleniyor');
       setAddresses([]);
     }
   }, [user]);

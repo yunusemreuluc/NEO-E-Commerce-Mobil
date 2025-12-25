@@ -2,8 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { API_BASE_URL } from '../../../config/api';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://10.241.81.212:4000";
+
 
 interface Category {
   id: number;
@@ -315,27 +316,27 @@ export default function NewProductPage() {
 
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Kısa Açıklama
+                      Açıklama
                     </label>
                     <textarea
                       value={shortDescription}
                       onChange={(e) => setShortDescription(e.target.value)}
                       rows={2}
                       className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Ürünün kısa açıklaması (liste görünümünde gösterilir)"
+                      placeholder="Ürünün kısa açıklaması (ürün kartlarında gösterilir)"
                     />
                   </div>
 
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Detaylı Açıklama
+                      Öne Çıkan Özellikler
                     </label>
                     <textarea
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
                       rows={4}
                       className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Ürünün detaylı açıklaması"
+                      placeholder="Ürünün öne çıkan özellikleri (detay sayfasında gösterilir)"
                     />
                   </div>
 
@@ -371,7 +372,7 @@ export default function NewProductPage() {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Fiyat (₺) *
+                      Eski Fiyat (₺) *
                     </label>
                     <input
                       type="number"
@@ -381,6 +382,9 @@ export default function NewProductPage() {
                       className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       required
                     />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Ürünün orijinal fiyatı (indirim uygulanmadan önceki fiyat)
+                    </p>
                   </div>
 
                   <div>
@@ -396,8 +400,18 @@ export default function NewProductPage() {
                       className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                     {discountPercentage && price && (
-                      <p className="text-sm text-green-600 mt-1">
-                        İndirimli Fiyat: ₺{(Number(price) * (1 - Number(discountPercentage) / 100)).toFixed(2)}
+                      <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-md">
+                        <p className="text-sm font-medium text-green-800">
+                          💰 Yeni Satış Fiyatı: ₺{(Number(price) * (1 - Number(discountPercentage) / 100)).toFixed(2)}
+                        </p>
+                        <p className="text-xs text-green-600 mt-1">
+                          Müşteriler bu fiyatı görecek (₺{Number(price).toFixed(2)} yerine)
+                        </p>
+                      </div>
+                    )}
+                    {!discountPercentage && price && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        İndirim yok - Satış fiyatı: ₺{Number(price).toFixed(2)}
                       </p>
                     )}
                   </div>

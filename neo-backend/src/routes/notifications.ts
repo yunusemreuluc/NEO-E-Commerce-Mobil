@@ -1,18 +1,34 @@
-import express from 'express';
+import express, { Request } from 'express';
 import { param, validationResult } from 'express-validator';
 import { RowDataPacket } from 'mysql2';
 import { db } from '../db';
+import { authenticateToken } from '../middleware/auth';
+
+interface AuthRequest extends Request {
+  user?: {
+    id: number;
+    email: string;
+    role: string;
+  };
+}
 
 const router = express.Router();
 
 // Kullanıcının bildirimlerini getir
 router.get('/', 
-  // Geçici olarak auth bypass
-  // authenticateToken,
-  async (req: any, res: any) => {
+  authenticateToken,
+  async (req: AuthRequest, res: any) => {
     try {
-      // Geçici olarak user_id = 1 kullan
-      const userId = 1; // (req as any).user.id;
+      const userId = req.user?.id;
+
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Kullanıcı kimliği bulunamadı'
+        });
+      }
+
+      console.log('📢 Bildirimler getiriliyor, userId:', userId);
 
       const [notifications] = await db.execute<RowDataPacket[]>(
         `SELECT id, type, title, message, metadata, is_read, created_at 
@@ -33,6 +49,8 @@ router.get('/',
           null
       }));
 
+      console.log('📢 Bulunan bildirim sayısı:', processedNotifications.length);
+
       res.json({
         success: true,
         data: processedNotifications
@@ -50,9 +68,9 @@ router.get('/',
 
 // Bildirimi okundu olarak işaretle
 router.patch('/:notificationId/read',
-  // authenticateToken,
+  authenticateToken,
   [param('notificationId').isInt({ min: 1 })],
-  async (req: any, res: any) => {
+  async (req: AuthRequest, res: any) => {
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
@@ -60,7 +78,14 @@ router.patch('/:notificationId/read',
       }
 
       const { notificationId } = req.params;
-      const userId = 1; // (req as any).user.id;
+      const userId = req.user?.id;
+
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Kullanıcı kimliği bulunamadı'
+        });
+      }
 
       await db.execute(
         `UPDATE notifications 
@@ -86,10 +111,17 @@ router.patch('/:notificationId/read',
 
 // Tüm bildirimleri okundu olarak işaretle
 router.patch('/read-all',
-  // authenticateToken,
-  async (req: any, res: any) => {
+  authenticateToken,
+  async (req: AuthRequest, res: any) => {
     try {
-      const userId = 1; // (req as any).user.id;
+      const userId = req.user?.id;
+
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Kullanıcı kimliği bulunamadı'
+        });
+      }
 
       await db.execute(
         `UPDATE notifications 
@@ -115,9 +147,9 @@ router.patch('/read-all',
 
 // Bildirimi sil
 router.delete('/:notificationId',
-  // authenticateToken,
+  authenticateToken,
   [param('notificationId').isInt({ min: 1 })],
-  async (req: any, res: any) => {
+  async (req: AuthRequest, res: any) => {
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
@@ -125,7 +157,14 @@ router.delete('/:notificationId',
       }
 
       const { notificationId } = req.params;
-      const userId = 1; // (req as any).user.id;
+      const userId = req.user?.id;
+
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Kullanıcı kimliği bulunamadı'
+        });
+      }
 
       await db.execute(
         `DELETE FROM notifications 

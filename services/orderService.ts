@@ -1,4 +1,5 @@
 // services/orderService.ts
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL, getAuthHeaders } from '../api';
 import {
     CreateOrderRequest,
@@ -9,17 +10,46 @@ import {
     OrderStatusHistory
 } from '../types/Order';
 
+// 401 hatası durumunda logout yapacak yardımcı fonksiyon
+const handleUnauthorized = async () => {
+  console.warn('Token geçersiz, kullanıcı çıkış yapılıyor');
+  await AsyncStorage.removeItem('auth_token');
+  await AsyncStorage.removeItem('user_data');
+  // Navigation burada yapılamaz, context'te handle edilecek
+};
+
+// API yanıtını kontrol eden yardımcı fonksiyon
+const checkAuthResponse = async (response: Response) => {
+  if (response.status === 401) {
+    await handleUnauthorized();
+    throw new Error('Oturum süresi dolmuş. Lütfen tekrar giriş yapın.');
+  }
+  return response;
+};
+
 export const orderService = {
   // Sipariş oluştur
   async createOrder(orderData: CreateOrderRequest): Promise<CreateOrderResponse> {
+    console.log('🚀 OrderService.createOrder başladı');
+    console.log('📦 Order data:', orderData);
+    
     const headers = await getAuthHeaders();
-    const response = await fetch(`${API_BASE_URL}/orders`, {
+    console.log('🔑 Headers:', headers);
+    
+    const url = `${API_BASE_URL}/api/orders`;
+    console.log('🌐 API URL:', url);
+    
+    const response = await fetch(url, {
       method: 'POST',
       headers,
       body: JSON.stringify(orderData),
     });
 
+    console.log('📡 Response status:', response.status);
+    console.log('📡 Response headers:', Object.fromEntries(response.headers.entries()));
+
     const result = await response.json();
+    console.log('📄 Response body:', result);
     
     if (!response.ok) {
       throw new Error(result.message || 'Sipariş oluşturulurken bir hata oluştu');
@@ -40,12 +70,15 @@ export const orderService = {
   }> {
     const headers = await getAuthHeaders();
     const response = await fetch(
-      `${API_BASE_URL}/orders?page=${page}&limit=${limit}`,
+      `${API_BASE_URL}/api/orders?page=${page}&limit=${limit}`,
       {
         method: 'GET',
         headers,
       }
     );
+
+    // Auth kontrolü
+    await checkAuthResponse(response);
 
     const result = await response.json();
     
@@ -76,10 +109,13 @@ export const orderService = {
     status_history: OrderStatusHistory[];
   }> {
     const headers = await getAuthHeaders();
-    const response = await fetch(`${API_BASE_URL}/orders/${orderId}`, {
+    const response = await fetch(`${API_BASE_URL}/api/orders/${orderId}`, {
       method: 'GET',
       headers,
     });
+
+    // Auth kontrolü
+    await checkAuthResponse(response);
 
     const result = await response.json();
     
@@ -119,7 +155,7 @@ export const orderService = {
   // Sipariş iptal et
   async cancelOrder(orderId: number): Promise<void> {
     const headers = await getAuthHeaders();
-    const response = await fetch(`${API_BASE_URL}/orders/${orderId}/cancel`, {
+    const response = await fetch(`${API_BASE_URL}/api/orders/${orderId}/cancel`, {
       method: 'PATCH',
       headers,
     });

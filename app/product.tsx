@@ -15,15 +15,13 @@ import {
     TouchableOpacity,
     View
 } from "react-native";
-import { createTables, getTestReviews, testReviewSubmit, testReviewWithImages } from "../api";
+import { createTables, getAuthHeaders, getProduct, getTestReviews, testReviewSubmit, testReviewWithImages } from "../api";
 import ImageCommentModal from "../components/ImageCommentModal";
+import { API_BASE_URL } from "../config/api";
 import { useAuth } from "../contexts/AuthContext";
 import { useCart } from "../contexts/CartContext";
 import { useFavorites } from "../contexts/FavoritesContext";
 import type { Product } from "../types/Product";
-
-// API base URL'i import et
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || "http://10.241.81.212:4000";
 
 export default function ProductScreen() {
   const params = useLocalSearchParams<{
@@ -75,7 +73,8 @@ export default function ProductScreen() {
   const productImages = useMemo(() => {
     // API'den gelen veri varsa onu kullan
     if (productData?.images && Array.isArray(productData.images) && productData.images.length > 0) {
-      return productData.images;
+      // Backend'den gelen images array'i - image_url field'ını kullan
+      return productData.images.map((img: any) => img.image_url || img.url || img);
     }
     
     // API'den tek resim varsa
@@ -106,15 +105,8 @@ export default function ProductScreen() {
       
       setProductLoading(true);
       try {
-        const response = await fetch(`${API_BASE_URL}/products`);
-        if (response.ok) {
-          const products = await response.json();
-          const foundProduct = products.find((p: any) => p.id === Number(params.id));
-          
-          if (foundProduct) {
-            setProductData(foundProduct);
-          }
-        }
+        const productData = await getProduct(Number(params.id));
+        setProductData(productData);
       } catch (error) {
         console.error('Ürün verisi çekme hatası:', error);
       } finally {
@@ -129,11 +121,42 @@ export default function ProductScreen() {
     () => {
       // API'den gelen veri varsa onu kullan, yoksa parametreleri kullan
       if (productData) {
+        const priceNumber = Number(productData.price) || 0;
+        
+        // İndirim hesaplama - ana sayfadaki mantığın aynısı
+        let oldPriceNumber: number | undefined;
+        
+        // 1. Direkt old_price varsa kullan
+        if (productData.old_price != null && Number(productData.old_price) > 0) {
+          oldPriceNumber = Number(productData.old_price);
+        }
+        // 2. discount_percentage varsa hesapla
+        else if (productData.discount_percentage && Number(productData.discount_percentage) > 0) {
+          const discountPercent = Number(productData.discount_percentage);
+          // Mevcut fiyat indirimli fiyat, eski fiyatı hesapla
+          oldPriceNumber = priceNumber / (1 - discountPercent / 100);
+        }
+        // 3. sale_price varsa kontrol et
+        else if (productData.sale_price != null && Number(productData.sale_price) > 0) {
+          const salePriceNumber = Number(productData.sale_price);
+          if (salePriceNumber < priceNumber) {
+            // price eski fiyat, sale_price yeni fiyat
+            return {
+              id: productData.id,
+              name: productData.name,
+              price: salePriceNumber,
+              oldPrice: priceNumber,
+              image: productData.image_url || productData.images?.[0] || "https://via.placeholder.com/400x300.png?text=NEO",
+              category: productData.category || "Genel",
+            };
+          }
+        }
+
         return {
           id: productData.id,
           name: productData.name,
-          price: Number(productData.price) || 0,
-          oldPrice: productData.old_price ? Number(productData.old_price) : undefined,
+          price: priceNumber,
+          oldPrice: oldPriceNumber && oldPriceNumber > priceNumber ? oldPriceNumber : undefined,
           image: productData.image_url || productData.images?.[0] || "https://via.placeholder.com/400x300.png?text=NEO",
           category: productData.category || "Genel",
         };
@@ -300,11 +323,11 @@ export default function ProductScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              const response = await fetch(`${API_BASE_URL}/comments/user/${reviewId}`, {
+              const headers = await getAuthHeaders(); // Auth header ekle
+              
+              const response = await fetch(`${API_BASE_URL}/api/comments/user/${reviewId}`, {
                 method: 'DELETE',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
+                headers,
                 body: JSON.stringify({
                   user_id: user?.id || 1
                 }),
@@ -314,7 +337,8 @@ export default function ProductScreen() {
                 showToast('Yorumunuz silindi');
                 loadReviews(); // Yorumları yenile
               } else {
-                Alert.alert('Hata', 'Yorum silinemedi');
+                const errorData = await response.json();
+                Alert.alert('Hata', errorData.message || 'Yorum silinemedi');
               }
             } catch (error) {
               console.error('Yorum silme hatası:', error);
@@ -343,12 +367,11 @@ export default function ProductScreen() {
 
     setReviewLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/comments/user/${editingReview.id}`, {
+      const headers = await getAuthHeaders(); // Auth header ekle
+      
+      const response = await fetch(`${API_BASE_URL}/api/comments/user/${editingReview.id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          // Auth header eklenebilir
-        },
+        headers,
         body: JSON.stringify({
           rating: reviewData.rating,
           comment: reviewData.comment,
@@ -363,7 +386,8 @@ export default function ProductScreen() {
         showToast('Yorumunuz güncellendi');
         loadReviews(); // Yorumları yenile
       } else {
-        Alert.alert('Hata', 'Yorum güncellenemedi');
+        const errorData = await response.json();
+        Alert.alert('Hata', errorData.message || 'Yorum güncellenemedi');
       }
     } catch (error) {
       console.error('Yorum güncelleme hatası:', error);
@@ -505,20 +529,29 @@ export default function ProductScreen() {
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.sectionTitle}>Açıklama</Text>
-          <Text style={styles.description}>
-            Bu alan, veritabanından gelecek ürün açıklaması için ayrılmıştır.
-            Şu anda demo metin gösteriliyor. Gerçek projede burada ürünün
-            detaylı özelliklerini, malzeme bilgisini, kargo ve iade koşullarını
-            yazacağız.
-          </Text>
+          {/* Açıklama - sadece içerik varsa göster */}
+          {productData?.short_description && productData.short_description.trim() && (
+            <>
+              <Text style={styles.sectionTitle}>Açıklama</Text>
+              <View style={styles.descriptionBox}>
+                <Text style={styles.description}>
+                  {productData.short_description}
+                </Text>
+              </View>
+            </>
+          )}
 
-          <Text style={styles.sectionTitle}>Öne Çıkan Özellikler</Text>
-          <View style={styles.featureList}>
-            <Text style={styles.featureItem}>• Yüksek kalite</Text>
-            <Text style={styles.featureItem}>• Uygun fiyat</Text>
-            <Text style={styles.featureItem}>• Hızlı teslimat</Text>
-          </View>
+          {/* Öne Çıkan Özellikler - sadece içerik varsa göster */}
+          {productData?.description && productData.description.trim() && (
+            <>
+              <Text style={styles.sectionTitle}>Öne Çıkan Özellikler</Text>
+              <View style={styles.featuresBox}>
+                <Text style={styles.featuresText}>
+                  {productData.description}
+                </Text>
+              </View>
+            </>
+          )}
 
           {/* Yorumlar Bölümü */}
           <View style={styles.reviewsSection}>
@@ -818,7 +851,44 @@ const styles = StyleSheet.create({
     marginTop: 16,
     marginBottom: 6,
   },
+  descriptionBox: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#eee",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
   description: {
+    fontSize: 14,
+    color: "#444",
+    lineHeight: 20,
+  },
+  featuresBox: {
+    backgroundColor: "#F8F9FA",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#E9ECEF",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  featuresText: {
     fontSize: 14,
     color: "#444",
     lineHeight: 20,

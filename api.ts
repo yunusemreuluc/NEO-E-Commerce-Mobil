@@ -1,14 +1,19 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import { API_BASE_URL } from './config/api';
 import type { ApiProduct } from "./types/Product";
 
-export const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_BASE_URL ||
-  "http://10.241.81.212:4000";
+// Merkezi konfigürasyondan API URL'i al
+export { API_BASE_URL };
 
 // Token'ı header'a ekleyen yardımcı fonksiyon
 export const getAuthHeaders = async () => {
   const token = await AsyncStorage.getItem('auth_token');
+  
+  if (!token) {
+    console.warn('Auth token bulunamadı');
+  }
+  
   return {
     'Content-Type': 'application/json',
     ...(token && { Authorization: `Bearer ${token}` })
@@ -17,7 +22,7 @@ export const getAuthHeaders = async () => {
 
 // Categories API
 export async function getCategories() {
-  const url = `${API_BASE_URL}/products/categories/list`;
+  const url = `${API_BASE_URL}/api/products/categories/list`;
 
   try {
     const res = await fetch(url);
@@ -44,7 +49,7 @@ export async function getCategories() {
 
 // Products API
 export async function getProducts(): Promise<ApiProduct[]> {
-  const url = `${API_BASE_URL}/products`;
+  const url = `${API_BASE_URL}/api/products`;
 
   try {
     const res = await fetch(url);
@@ -74,7 +79,7 @@ export async function getProducts(): Promise<ApiProduct[]> {
 }
 
 export async function getProduct(id: number): Promise<ApiProduct> {
-  const url = `${API_BASE_URL}/products/${id}`;
+  const url = `${API_BASE_URL}/api/products/${id}`;
 
   try {
     const res = await fetch(url);
@@ -86,9 +91,14 @@ export async function getProduct(id: number): Promise<ApiProduct> {
 
     const data: any = await res.json();
 
-    // Backend'ten gelen yeni format: {success: true, data: {product: {}}}
-    if (data.success && data.data && data.data.product) {
-      return data.data.product as ApiProduct;
+    // Backend'ten gelen yeni format: {success: true, data: {product: {}, images: []}}
+    if (data.success && data.data) {
+      const productData = data.data.product;
+      // Resimleri product objesine ekle
+      if (data.data.images && Array.isArray(data.data.images)) {
+        productData.images = data.data.images;
+      }
+      return productData as ApiProduct;
     }
 
     // Eski format için fallback: direkt object
@@ -105,7 +115,7 @@ export async function getProduct(id: number): Promise<ApiProduct> {
 
 // Auth API
 export async function loginUser(email: string, password: string) {
-  const url = `${API_BASE_URL}/auth/login`;
+  const url = `${API_BASE_URL}/api/auth/login`;
 
   try {
     const res = await fetch(url, {
@@ -127,7 +137,7 @@ export async function loginUser(email: string, password: string) {
 }
 
 export async function registerUser(name: string, email: string, password: string) {
-  const url = `${API_BASE_URL}/auth/register`;
+  const url = `${API_BASE_URL}/api/auth/register`;
 
   try {
     const res = await fetch(url, {
@@ -150,7 +160,7 @@ export async function registerUser(name: string, email: string, password: string
 
 // Reviews API - Gelişmiş Yorum Sistemi
 export async function getProductReviews(productId: number) {
-  const url = `${API_BASE_URL}/comments/product/${productId}`;
+  const url = `${API_BASE_URL}/api/comments/product/${productId}`;
 
   try {
     const res = await fetch(url);
@@ -168,7 +178,7 @@ export async function getProductReviews(productId: number) {
 }
 
 export async function addReview(productId: number, rating: number, comment: string) {
-  const url = `${API_BASE_URL}/comments`;
+  const url = `${API_BASE_URL}/api/comments`;
 
   try {
     const headers = await getAuthHeaders();
@@ -196,7 +206,7 @@ export async function addReview(productId: number, rating: number, comment: stri
 
 // Test fonksiyonu
 export async function testCommentEndpoint() {
-  const url = `${API_BASE_URL}/comments/test`;
+  const url = `${API_BASE_URL}/api/comments/test`;
   
   try {
     const res = await fetch(url, {
@@ -214,14 +224,16 @@ export async function testCommentEndpoint() {
   }
 }
 
-// Test yorum gönderme (auth olmadan)
+// Test yorum gönderme (auth ile)
 export async function testReviewSubmit(productId: number, rating: number, comment: string) {
-  const url = `${API_BASE_URL}/comments/test-review`;
+  const url = `${API_BASE_URL}/api/comments/test-review`;
   
   try {
+    const headers = await getAuthHeaders(); // Auth header ekle
+    
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         product_id: productId,
         rating,
@@ -230,10 +242,14 @@ export async function testReviewSubmit(productId: number, rating: number, commen
     });
 
     const data = await res.json();
-    // Test yorum yanıtı alındı
+    
+    if (!res.ok) {
+      throw new Error(data.message || 'Yorum gönderilemedi');
+    }
+    
     return data;
   } catch (error) {
-    console.error('Test yorum hatası:', error);
+    console.error('Yorum gönderme hatası:', error);
     throw error;
   }
 }
@@ -255,7 +271,7 @@ export async function testReviewWithImages(
   comment: string, 
   images: any[]
 ) {
-  const url = `${API_BASE_URL}/comments/test-review-images`;
+  const url = `${API_BASE_URL}/api/comments/test-review-images`;
   
   // Endpoint'in mevcut olup olmadığını kontrol et
   const endpointExists = await checkEndpointExists(url);
@@ -344,7 +360,7 @@ export async function testReviewWithImages(
 
 // Veritabanı tablolarını oluştur
 export async function createTables() {
-  const url = `${API_BASE_URL}/comments/create-tables`;
+  const url = `${API_BASE_URL}/api/comments/create-tables`;
   
   try {
     const res = await fetch(url, {
@@ -361,7 +377,7 @@ export async function createTables() {
 
 // Test yorumları getirme
 export async function getTestReviews(productId: number) {
-  const url = `${API_BASE_URL}/comments/test-reviews/${productId}`;
+  const url = `${API_BASE_URL}/api/comments/test-reviews/${productId}`;
   
   try {
     const res = await fetch(url);
@@ -380,7 +396,7 @@ export async function addReviewWithImages(
   comment: string, 
   images: any[]
 ) {
-  const url = `${API_BASE_URL}/comments`;
+  const url = `${API_BASE_URL}/api/comments`;
 
   try {
     const token = await AsyncStorage.getItem('auth_token');
@@ -442,3 +458,27 @@ export async function addReviewWithImages(
     throw err;
   }
 }
+// Basit arama API fonksiyonu
+export const searchProducts = async (query: string) => {
+  const response = await fetch(`${API_BASE_URL}/api/products/search?q=${encodeURIComponent(query)}`);
+  const data = await response.json();
+  
+  if (!data.success) {
+    throw new Error(data.message || 'Arama başarısız');
+  }
+  
+  return data.data;
+};
+
+// Arama önerileri için hızlı API
+export const getSearchSuggestions = async (query: string) => {
+  if (!query || query.length < 2) return [];
+  
+  try {
+    const result = await searchProducts(query);
+    return result.suggestions || [];
+  } catch (error) {
+    console.error('Arama önerileri hatası:', error);
+    return [];
+  }
+};

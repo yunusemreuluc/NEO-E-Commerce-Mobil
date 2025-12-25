@@ -1,10 +1,217 @@
 // neo-backend/src/routes/products.ts
 import express from 'express';
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
+import { API_BASE_URL } from '../config/api';
 import { db } from '../db';
 import { authenticateToken } from '../middleware/auth';
 
 const router = express.Router();
+
+// Gelişmiş arama endpoint'i
+router.get('/search', async (req, res) => {
+  try {
+    const query = req.query.q as string;
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const category = req.query.category as string;
+    const sortBy = req.query.sortBy as string || 'relevance';
+    const offset = (page - 1) * limit;
+
+    if (!query || query.trim().length < 2) {
+      return res.json({
+        success: true,
+        data: {
+          products: [],
+          suggestions: [],
+          total: 0,
+          page,
+          limit,
+          message: 'En az 2 karakter girin'
+        }
+      });
+    }
+
+    const searchTerm = query.trim();
+    const searchWords = searchTerm.split(' ').filter(word => word.length > 1);
+    
+    // Ana arama sorgusu - relevance skorlaması ile
+    let searchQuery = `
+      SELECT DISTINCT
+        p.*,
+        c.name as category_name,
+        c.slug as category_slug,
+        COALESCE(pi.image_url, p.image_url) as image_url,
+        (
+          -- Relevance skoru hesaplama
+          CASE WHEN p.name LIKE ? THEN 100 ELSE 0 END +
+          CASE WHEN p.name LIKE ? THEN 50 ELSE 0 END +
+          CASE WHEN p.short_description LIKE ? THEN 30 ELSE 0 END +
+          CASE WHEN p.description LIKE ? THEN 20 ELSE 0 END +
+          CASE WHEN p.brand LIKE ? THEN 40 ELSE 0 END +
+          CASE WHEN c.name LIKE ? THEN 25 ELSE 0 END +
+          CASE WHEN p.tags LIKE ? THEN 15 ELSE 0 END
+        ) as relevance_score
+      FROM products p
+      LEFT JOIN categories c ON p.category_id = c.id
+      LEFT JOIN product_images pi ON p.id = pi.product_id AND pi.is_primary = TRUE
+      WHERE p.is_active = TRUE
+      AND (
+        p.name LIKE ? OR
+        p.short_description LIKE ? OR
+        p.description LIKE ? OR
+        p.brand LIKE ? OR
+        c.name LIKE ? OR
+        p.tags LIKE ?
+      )
+    `;
+
+    let queryParams = [
+      // Relevance skoru için parametreler
+      `${searchTerm}%`,        // Tam başlangıç eşleşmesi
+      `%${searchTerm}%`,       // Kısmi eşleşme
+      `%${searchTerm}%`,       // Kısa açıklama
+      `%${searchTerm}%`,       // Açıklama
+      `%${searchTerm}%`,       // Marka
+      `%${searchTerm}%`,       // Kategori
+      `%${searchTerm}%`,       // Tags
+      // WHERE koşulu için parametreler
+      `%${searchTerm}%`,
+      `%${searchTerm}%`,
+      `%${searchTerm}%`,
+      `%${searchTerm}%`,
+      `%${searchTerm}%`,
+      `%${searchTerm}%`
+    ];
+
+    // Kategori filtresi
+    if (category) {
+      searchQuery += ` AND (c.slug = ? OR c.name LIKE ?)`;
+      queryParams.push(category, `%${category}%`);
+    }
+
+    // Sıralama
+    if (sortBy === 'relevance') {
+      searchQuery += ` ORDER BY relevance_score DESC, p.rating DESC`;
+    } else if (sortBy === 'price_asc') {
+      searchQuery += ` ORDER BY p.price ASC`;
+    } else if (sortBy === 'price_desc') {
+      searchQuery += ` ORDER BY p.price DESC`;
+    } else if (sortBy === 'rating') {
+      searchQuery += ` ORDER BY p.rating DESC, p.review_count DESC`;
+    } else if (sortBy === 'newest') {
+      searchQuery += ` ORDER BY p.created_at DESC`;
+    } else {
+      searchQuery += ` ORDER BY relevance_score DESC`;
+    }
+
+    // Sayfalama
+    searchQuery += ` LIMIT ? OFFSET ?`;
+    queryParams.push(limit.toString(), offset.toString());
+
+    const [products] = await db.execute(searchQuery, queryParams) as [RowDataPacket[], any];
+
+    // Toplam sonuç sayısı
+    const countQuery = `
+      SELECT COUNT(DISTINCT p.id) as total
+      FROM products p
+      LEFT JOIN categories c ON p.category_id = c.id
+      WHERE p.is_active = TRUE
+      AND (
+        p.name LIKE ? OR
+        p.short_description LIKE ? OR
+        p.description LIKE ? OR
+        p.brand LIKE ? OR
+        c.name LIKE ? OR
+        p.tags LIKE ?
+      )
+      ${category ? 'AND (c.slug = ? OR c.name LIKE ?)' : ''}
+    `;
+
+    let countParams = [
+      `%${searchTerm}%`,
+      `%${searchTerm}%`,
+      `%${searchTerm}%`,
+      `%${searchTerm}%`,
+      `%${searchTerm}%`,
+      `%${searchTerm}%`
+    ];
+
+    if (category) {
+      countParams.push(category, `%${category}%`);
+    }
+
+    const [countResult] = await db.execute(countQuery, countParams) as [RowDataPacket[], any];
+    const total = countResult[0].total;
+
+    // Arama önerileri (benzer ürünler)
+    const suggestionQuery = `
+      SELECT DISTINCT p.name, p.brand, c.name as category_name
+      FROM products p
+      LEFT JOIN categories c ON p.category_id = c.id
+      WHERE p.is_active = TRUE
+      AND (p.name LIKE ? OR p.brand LIKE ? OR c.name LIKE ?)
+      AND p.id NOT IN (${products.map(() => '?').join(',') || '0'})
+      LIMIT 5
+    `;
+
+    const suggestionParams = [
+      `%${searchTerm}%`,
+      `%${searchTerm}%`,
+      `%${searchTerm}%`,
+      ...products.map(p => p.id)
+    ];
+
+    const [suggestions] = await db.execute(suggestionQuery, suggestionParams) as [RowDataPacket[], any];
+
+    // Resim URL'lerini düzelt
+    const processedProducts = products.map(product => ({
+      ...product,
+      image_url: product.image_url && !product.image_url.startsWith('http') 
+        ? `${API_BASE_URL}${product.image_url}` 
+        : product.image_url,
+      price: parseFloat(product.price) || 0,
+      sale_price: parseFloat(product.sale_price) || parseFloat(product.price) || 0,
+      rating: parseFloat(product.rating) || 0,
+      review_count: parseInt(product.review_count) || 0
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        products: processedProducts,
+        suggestions: suggestions.map(s => ({
+          text: s.name,
+          type: 'product'
+        })).concat(
+          suggestions.map(s => ({
+            text: s.brand,
+            type: 'brand'
+          })).filter(s => s.text)
+        ).concat(
+          suggestions.map(s => ({
+            text: s.category_name,
+            type: 'category'
+          })).filter(s => s.text)
+        ).slice(0, 8),
+        pagination: {
+          page,
+          limit,
+          total,
+          pages: Math.ceil(total / limit)
+        },
+        query: searchTerm,
+        resultCount: products.length
+      }
+    });
+
+  } catch (error) {
+    console.error('Arama hatası:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Arama sırasında bir hata oluştu'
+    });
+  }
+});
 
 // Tüm ürünleri listele (filtreleme ve sayfalama ile)
 router.get('/', async (req, res) => {
@@ -190,6 +397,33 @@ router.get('/:id', async (req, res) => {
 });
 
 // Kategorileri listele
+router.get('/categories', async (req, res) => {
+  try {
+    const [categories] = await db.execute(
+      `SELECT 
+        c.*,
+        (SELECT COUNT(*) FROM products p WHERE p.category_id = c.id AND p.is_active = TRUE) as product_count,
+        parent.name as parent_name
+      FROM categories c
+      LEFT JOIN categories parent ON c.parent_id = parent.id
+      WHERE c.is_active = TRUE
+      ORDER BY c.parent_id ASC, c.sort_order ASC, c.name ASC`
+    ) as [RowDataPacket[], any];
+
+    res.json({
+      success: true,
+      data: { categories }
+    });
+  } catch (error) {
+    console.error('Kategoriler yüklenirken hata:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Kategoriler yüklenemedi'
+    });
+  }
+});
+
+// Kategorileri listele (eski endpoint - geriye uyumluluk için)
 router.get('/categories/list', async (req, res) => {
   try {
     const [categories] = await db.execute(
@@ -287,6 +521,53 @@ router.get('/search/suggestions', async (req, res) => {
   }
 });
 
+// Admin: Veritabanı düzeltme (category alanı sorunu)
+router.post('/admin/fix-category-field', authenticateToken, async (req, res) => {
+  const connection = await db.getConnection();
+  
+  try {
+    await connection.beginTransaction();
+    
+    console.log('Category alanı düzeltiliyor...');
+
+    // Category alanına default değer ver veya kaldır
+    try {
+      // Önce category alanını kaldırmayı dene
+      await connection.execute('ALTER TABLE products DROP COLUMN category');
+      console.log('Category alanı kaldırıldı');
+    } catch (error: any) {
+      if (error.message.includes("check that column/key exists")) {
+        console.log('Category alanı zaten yok');
+      } else {
+        // Kaldıramıyorsak default değer ver
+        try {
+          await connection.execute("ALTER TABLE products MODIFY COLUMN category VARCHAR(100) DEFAULT 'Genel'");
+          console.log('Category alanına default değer verildi');
+        } catch (modifyError: any) {
+          console.log('Category alanı düzeltme hatası:', modifyError.message);
+        }
+      }
+    }
+
+    await connection.commit();
+
+    res.json({
+      success: true,
+      message: 'Veritabanı category alanı düzeltildi!'
+    });
+
+  } catch (error) {
+    await connection.rollback();
+    console.error('Veritabanı düzeltme hatası:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Veritabanı düzeltilirken bir hata oluştu'
+    });
+  } finally {
+    connection.release();
+  }
+});
+
 // Admin: Gelişmiş ürün sistemi kurulumu
 router.post('/admin/setup-enhanced', authenticateToken, async (req, res) => {
   const connection = await db.getConnection();
@@ -296,7 +577,17 @@ router.post('/admin/setup-enhanced', authenticateToken, async (req, res) => {
     
     console.log('Gelişmiş ürün sistemi kuruluyor...');
 
-    // 1. Products tablosunu genişlet
+    // 1. Önce category alanını kaldır (eğer varsa)
+    try {
+      await connection.execute('ALTER TABLE products DROP COLUMN category');
+      console.log('Eski category alanı kaldırıldı');
+    } catch (error: any) {
+      if (!error.message.includes("check that column/key exists")) {
+        console.log('Category alanı kaldırma hatası:', error.message);
+      }
+    }
+
+    // 2. Products tablosunu genişlet
     const alterQueries = [
       'ALTER TABLE products ADD COLUMN description TEXT AFTER name',
       'ALTER TABLE products ADD COLUMN short_description VARCHAR(500) AFTER description',
@@ -478,6 +769,38 @@ router.post('/admin/setup-enhanced', authenticateToken, async (req, res) => {
   }
 });
 
+// Admin: Basit ürün oluştur (test için)
+router.post('/admin/simple', authenticateToken, async (req, res) => {
+  const { name, price, description } = req.body;
+
+  if (!name || !price) {
+    return res.status(400).json({
+      success: false,
+      message: 'Ürün adı ve fiyat gerekli'
+    });
+  }
+
+  try {
+    const [result] = await db.execute(
+      'INSERT INTO products (name, price, description, image_url) VALUES (?, ?, ?, ?)',
+      [name, price, description || 'Açıklama yok', '']
+    ) as [ResultSetHeader, any];
+
+    res.json({
+      success: true,
+      message: 'Ürün başarıyla oluşturuldu',
+      data: { product_id: result.insertId }
+    });
+
+  } catch (error) {
+    console.error('Basit ürün oluşturma hatası:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Ürün oluşturulurken hata: ' + (error instanceof Error ? error.message : 'Bilinmeyen hata')
+    });
+  }
+});
+
 // Admin: Ürün oluştur
 router.post('/admin', authenticateToken, async (req, res) => {
   const {
@@ -499,17 +822,46 @@ router.post('/admin', authenticateToken, async (req, res) => {
   try {
     await connection.beginTransaction();
 
-    // Ana ürünü oluştur
+    // Fiyat hesaplaması - Admin panelinden gelen price eski fiyat
+    const oldPrice = Number(price);
+    const discountPercent = Number(discount_percentage) || 0;
+    
+    // Yeni fiyat hesapla (indirimli fiyat)
+    const newPrice = discountPercent > 0 
+      ? oldPrice * (1 - discountPercent / 100)
+      : oldPrice;
+
+    // Short description'ı kısalt (veritabanı sınırı için)
+    const shortDesc = short_description ? 
+      (short_description.length > 255 ? short_description.substring(0, 255) : short_description) : '';
+
+    // Ana ürünü oluştur - price alanına yeni fiyatı kaydet
     const [productResult] = await connection.execute(
       `INSERT INTO products (
         name, description, short_description, brand, category_id,
-        price, sku, weight, dimensions, material, color, size,
+        price, old_price, sku, weight, dimensions, material, color, size,
         stock_quantity, is_featured, tags, discount_percentage, image_url
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [name, description, short_description, brand, category_id,
-       price, sku, weight, dimensions, material, color, size,
-       stock_quantity || 0, is_featured || false, 
-       tags ? JSON.stringify(tags) : null, discount_percentage || 0, image_url]
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        name, 
+        description || '', 
+        shortDesc, 
+        brand || '', 
+        category_id || null,
+        newPrice, 
+        discountPercent > 0 ? oldPrice : null,
+        sku || '', 
+        weight || null, 
+        dimensions || '', 
+        material || '', 
+        color || '', 
+        size || '',
+        stock_quantity || 0, 
+        is_featured || false, 
+        tags ? JSON.stringify(tags) : null, 
+        discount_percentage || 0, 
+        image_url || ''
+      ]
     ) as [ResultSetHeader, any];
 
     const productId = productResult.insertId;
@@ -556,9 +908,19 @@ router.post('/admin', authenticateToken, async (req, res) => {
   } catch (error) {
     await connection.rollback();
     console.error('Ürün oluşturma hatası:', error);
+    
+    // Detaylı hata mesajı
+    let errorMessage = 'Ürün oluşturulurken bir hata oluştu';
+    if (error instanceof Error) {
+      console.error('Hata detayı:', error.message);
+      if (error.message.includes('category')) {
+        errorMessage = 'Kategori alanı hatası: ' + error.message;
+      }
+    }
+    
     res.status(500).json({
       success: false,
-      message: 'Ürün oluşturulurken bir hata oluştu'
+      message: errorMessage
     });
   } finally {
     connection.release();
@@ -872,16 +1234,25 @@ router.put('/admin/:id', authenticateToken, async (req, res) => {
   try {
     await connection.beginTransaction();
 
-    // Ana ürünü güncelle
+    // Fiyat hesaplaması - Admin panelinden gelen price eski fiyat
+    const oldPrice = Number(price);
+    const discountPercent = Number(discount_percentage) || 0;
+    
+    // Yeni fiyat hesapla (indirimli fiyat)
+    const newPrice = discountPercent > 0 
+      ? oldPrice * (1 - discountPercent / 100)
+      : oldPrice;
+
+    // Ana ürünü güncelle - price alanına yeni fiyatı kaydet
     await connection.execute(
       `UPDATE products SET 
         name = ?, description = ?, short_description = ?, brand = ?, category_id = ?,
-        price = ?, sku = ?, weight = ?, dimensions = ?, material = ?, color = ?, size = ?,
+        price = ?, old_price = ?, sku = ?, weight = ?, dimensions = ?, material = ?, color = ?, size = ?,
         stock_quantity = ?, is_featured = ?, tags = ?, discount_percentage = ?, 
-        image_url = ?, is_active = ?, updated_at = NOW()
+        image_url = ?, is_active = ?
       WHERE id = ?`,
       [name, description, short_description, brand, category_id,
-       price, sku, weight, dimensions, material, color, size,
+       newPrice, discountPercent > 0 ? oldPrice : null, sku, weight, dimensions, material, color, size,
        stock_quantity || 0, is_featured || false, 
        tags ? JSON.stringify(tags) : null, discount_percentage || 0, 
        image_url, is_active !== false, productId]
@@ -943,6 +1314,81 @@ router.put('/admin/:id', authenticateToken, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Ürün güncellenirken bir hata oluştu'
+    });
+  } finally {
+    connection.release();
+  }
+});
+
+// Admin: Ürün sil (gerçek silme)
+router.delete('/:id', authenticateToken, async (req, res) => {
+  const productId = req.params.id;
+
+  if (!productId || isNaN(Number(productId))) {
+    return res.status(400).json({
+      success: false,
+      message: 'Geçerli bir ürün ID gerekli'
+    });
+  }
+
+  const connection = await db.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    // Önce ürünün var olup olmadığını kontrol et
+    const [productCheck] = await connection.execute(
+      'SELECT id, name FROM products WHERE id = ?',
+      [productId]
+    ) as [RowDataPacket[], any];
+
+    if (productCheck.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({
+        success: false,
+        message: 'Ürün bulunamadı'
+      });
+    }
+
+    const productName = productCheck[0].name;
+
+    // İlişkili tabloları temizle (CASCADE olduğu için otomatik silinecek ama manuel yapalım)
+    await connection.execute('DELETE FROM product_images WHERE product_id = ?', [productId]);
+    await connection.execute('DELETE FROM product_attributes WHERE product_id = ?', [productId]);
+    await connection.execute('DELETE FROM product_variants WHERE product_id = ?', [productId]);
+    await connection.execute('DELETE FROM product_reviews WHERE product_id = ?', [productId]);
+    
+    // Ana ürünü sil
+    const [deleteResult] = await connection.execute(
+      'DELETE FROM products WHERE id = ?',
+      [productId]
+    ) as [ResultSetHeader, any];
+
+    if (deleteResult.affectedRows === 0) {
+      await connection.rollback();
+      return res.status(404).json({
+        success: false,
+        message: 'Ürün silinemedi'
+      });
+    }
+
+    await connection.commit();
+
+    res.json({
+      success: true,
+      message: `Ürün "${productName}" başarıyla silindi`,
+      data: {
+        deleted_product_id: productId,
+        deleted_product_name: productName
+      }
+    });
+
+  } catch (error) {
+    await connection.rollback();
+    console.error('Ürün silme hatası:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Ürün silinirken bir hata oluştu'
     });
   } finally {
     connection.release();

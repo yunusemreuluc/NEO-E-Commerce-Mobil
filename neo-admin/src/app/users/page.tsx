@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { API_BASE_URL } from '../../config/api';
 
 interface User {
   id: number;
@@ -20,12 +21,15 @@ interface UserStats {
 }
 
 interface UsersResponse {
-  users: User[];
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    pages: number;
+  success: boolean;
+  data: {
+    users: User[];
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      pages: number;
+    };
   };
 }
 
@@ -34,6 +38,7 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [userStats, setUserStats] = useState<UserStats | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const [filter, setFilter] = useState({
     search: '',
     page: 1,
@@ -54,16 +59,18 @@ export default function UsersPage() {
       params.append('page', filter.page.toString());
       params.append('limit', filter.limit.toString());
 
-      const response = await fetch(`http://10.241.81.212:4000/users?${params}`, {
+      const response = await fetch(`${API_BASE_URL}/users?${params}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('admin_token')}`,
         },
       });
 
       if (response.ok) {
-        const data: UsersResponse = await response.json();
-        setUsers(data.users);
-        setPagination(data.pagination);
+        const result: UsersResponse = await response.json();
+        if (result.success && result.data) {
+          setUsers(result.data.users);
+          setPagination(result.data.pagination);
+        }
       }
     } catch (error) {
       console.error('Kullanıcılar yüklenirken hata:', error);
@@ -74,16 +81,18 @@ export default function UsersPage() {
 
   const fetchUserDetails = async (userId: number) => {
     try {
-      const response = await fetch(`http://10.241.81.212:4000/users/${userId}`, {
+      const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('admin_token')}`,
         },
       });
 
       if (response.ok) {
-        const data = await response.json();
-        setSelectedUser(data.user);
-        setUserStats(data.stats);
+        const result = await response.json();
+        if (result.success && result.data) {
+          setSelectedUser(result.data.user);
+          setUserStats(result.data.stats);
+        }
       }
     } catch (error) {
       console.error('Kullanıcı detayları yüklenirken hata:', error);
@@ -92,7 +101,7 @@ export default function UsersPage() {
 
   const updateUserStatus = async (userId: number, isActive: boolean) => {
     try {
-      const response = await fetch(`http://10.241.81.212:4000/users/${userId}/status`, {
+      const response = await fetch(`${API_BASE_URL}/users/${userId}/status`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -114,7 +123,7 @@ export default function UsersPage() {
 
   const updateUserRole = async (userId: number, role: string) => {
     try {
-      const response = await fetch(`http://10.241.81.212:4000/users/${userId}/role`, {
+      const response = await fetch(`${API_BASE_URL}/users/${userId}/role`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -131,6 +140,46 @@ export default function UsersPage() {
       }
     } catch (error) {
       console.error('Kullanıcı rolü güncellenirken hata:', error);
+    }
+  };
+
+  const deleteUser = async (userId: number, userName: string, userEmail: string) => {
+    if (!confirm(`"${userName}" (${userEmail}) kullanıcısını silmek istediğinizden emin misiniz? Bu işlem geri alınamaz ve kullanıcının tüm verileri silinecektir.`)) {
+      return;
+    }
+
+    setDeletingId(userId);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        const message = data?.message || 'Kullanıcı silinemedi';
+        throw new Error(message);
+      }
+
+      alert(data.message || 'Kullanıcı başarıyla silindi');
+      fetchUsers(); // Listeyi yenile
+      
+      // Eğer silinen kullanıcı seçili ise, seçimi temizle
+      if (selectedUser?.id === userId) {
+        setSelectedUser(null);
+        setUserStats(null);
+      }
+
+    } catch (err) {
+      console.error('Kullanıcı silme hatası:', err);
+      alert(err instanceof Error ? err.message : 'Kullanıcı silinirken hata oluştu');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -249,13 +298,32 @@ export default function UsersPage() {
                               e.stopPropagation();
                               updateUserStatus(user.id, !user.is_active);
                             }}
-                            className={`${
+                            className={`text-xs px-2 py-1 rounded ${
                               user.is_active 
-                                ? 'text-red-600 hover:text-red-900' 
-                                : 'text-green-600 hover:text-green-900'
+                                ? 'text-red-600 hover:text-red-900 bg-red-50' 
+                                : 'text-green-600 hover:text-green-900 bg-green-50'
                             }`}
                           >
                             {user.is_active ? 'Pasifleştir' : 'Aktifleştir'}
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteUser(user.id, user.name, user.email);
+                            }}
+                            disabled={deletingId === user.id}
+                            className="text-red-600 hover:text-red-900 text-xs bg-red-50 px-2 py-1 rounded disabled:opacity-50 flex items-center gap-1"
+                          >
+                            {deletingId === user.id ? (
+                              <>
+                                <div className="w-3 h-3 border border-red-500 border-t-transparent rounded-full animate-spin"></div>
+                                Siliniyor...
+                              </>
+                            ) : (
+                              <>
+                                🗑️ Sil
+                              </>
+                            )}
                           </button>
                         </div>
                       </td>

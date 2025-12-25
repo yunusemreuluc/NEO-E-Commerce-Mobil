@@ -114,6 +114,13 @@ export default function ProductCard({
         {product.name}
       </Text>
 
+      {/* Kısa açıklama (varsa) */}
+      {product.description && (
+        <Text style={styles.description} numberOfLines={2}>
+          {product.description}
+        </Text>
+      )}
+
       {/* Fiyatlar */}
       <View style={styles.bottomRow}>
         <Text style={styles.price}>{product.price.toFixed(2)} ₺</Text>
@@ -192,6 +199,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     lineHeight: 18,
+  },
+  description: {
+    marginTop: 4,
+    fontSize: 12,
+    color: "#666",
+    lineHeight: 16,
   },
   bottomRow: {
     flexDirection: "row",

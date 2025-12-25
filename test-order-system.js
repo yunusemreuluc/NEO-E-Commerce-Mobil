@@ -1,5 +1,5 @@
 // test-order-system.js
-const API_BASE_URL = 'http://10.241.81.212:4000';
+const { API_BASE_URL } = require('./config/test-config');
 
 async function testOrderSystem() {
   console.log('🧪 Sipariş Sistemi Testi Başlıyor...\n');

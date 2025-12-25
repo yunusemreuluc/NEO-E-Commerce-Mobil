@@ -167,7 +167,9 @@ router.post('/create-tables', async (req: any, res: any) => {
 });
 
 // Test yorum gönderme (auth olmadan)
-router.post('/test-review', async (req: any, res: any) => {
+router.post('/test-review', 
+  authenticateToken, // Auth kontrolü ekle
+  async (req: any, res: any) => {
   // Test yorum gönderiliyor
   
   try {
@@ -181,26 +183,26 @@ router.post('/test-review', async (req: any, res: any) => {
       });
     }
 
-    // Test kullanıcısı ID'si (1 varsayalım)
-    const testUserId = 1;
+    // Gerçek kullanıcı ID'sini al (JWT'den)
+    const userId = req.user.id;
     
     // Veritabanına kaydet
     const [result] = await db.execute<ResultSetHeader>(
       `INSERT INTO reviews (product_id, user_id, rating, comment, status) 
        VALUES (?, ?, ?, ?, 'approved')`,
-      [product_id, testUserId, rating, comment]
+      [product_id, userId, rating, comment]
     );
 
     // Test yorum kaydedildi
 
     res.json({
       success: true,
-      message: 'Test yorumu başarıyla kaydedildi!',
+      message: 'Yorum başarıyla kaydedildi!',
       data: { reviewId: result.insertId }
     });
 
   } catch (error) {
-    console.error('Test yorum hatası:', error);
+    console.error('Yorum kaydetme hatası:', error);
     res.status(500).json({
       success: false,
       message: 'Veritabanı hatası: ' + (error as any).message
@@ -896,14 +898,13 @@ router.patch('/admin/user/:userId/ban',
 
 // Admin: Yorum silme
 router.delete('/admin/:reviewId',
-  // Geçici olarak auth kontrolünü bypass et
-  // authenticateToken,
-  // requireAdmin,
+  authenticateToken,
+  // requireAdmin, // Admin kontrolü şimdilik kapalı
   [
     param('reviewId').isInt({ min: 1 }),
     body('reason').optional().isLength({ max: 500 })
   ],
-  async (req: any, res: any) => {
+  async (req: AuthRequest, res: any) => {
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
@@ -912,7 +913,9 @@ router.delete('/admin/:reviewId',
 
       const { reviewId } = req.params;
       const { reason } = req.body;
-      const adminId = 1; // Geçici olarak sabit admin ID
+      const adminId = req.user?.id || 1; // Auth'dan gelen admin ID
+
+      console.log('🗑️ Admin yorum silme isteği:', { reviewId, reason, adminId });
 
       // Yorum bilgilerini al (bildirim için)
       const [review] = await db.execute<RowDataPacket[]>(
@@ -936,6 +939,8 @@ router.delete('/admin/:reviewId',
       const productId = review[0].product_id;
       const userComment = review[0].comment;
       const rating = review[0].rating;
+
+      console.log('📝 Silinecek yorum bilgileri:', { userId, productName, rating });
 
       // Yorumu sil
       await db.execute('DELETE FROM reviews WHERE id = ?', [reviewId]);
@@ -964,14 +969,18 @@ router.delete('/admin/:reviewId',
           })
         };
 
+        console.log('📢 Bildirim oluşturuluyor:', notificationData);
+
         await db.execute(
           `INSERT INTO notifications (user_id, type, title, message, metadata, created_at)
            VALUES (?, ?, ?, ?, ?, NOW())`,
           [notificationData.user_id, notificationData.type, notificationData.title, 
            notificationData.message, notificationData.metadata]
         );
+
+        console.log('✅ Bildirim başarıyla oluşturuldu');
       } catch (error) {
-        console.log('Bildirim oluşturma atlandı (tablo yok)');
+        console.error('❌ Bildirim oluşturma hatası:', error);
       }
 
       // Admin işlemini logla
@@ -1002,7 +1011,7 @@ router.delete('/admin/:reviewId',
 
 // Kullanıcı yorum güncelleme
 router.put('/user/:reviewId',
-  // authenticateToken, // Şimdilik auth bypass
+  authenticateToken, // Auth kontrolünü aktif et
   [
     param('reviewId').isInt({ min: 1 }),
     body('rating').isInt({ min: 1, max: 5 }),
@@ -1017,7 +1026,7 @@ router.put('/user/:reviewId',
 
       const { reviewId } = req.params;
       const { rating, comment } = req.body;
-      const userId = 1; // Geçici olarak sabit user ID
+      const userId = req.user.id; // JWT'den gerçek user ID'yi al
 
       // Yorum sahibi kontrolü
       const [reviewCheck] = await db.execute<RowDataPacket[]>(
@@ -1062,7 +1071,7 @@ router.put('/user/:reviewId',
 
 // Kullanıcı yorum silme
 router.delete('/user/:reviewId',
-  // authenticateToken, // Şimdilik auth bypass
+  authenticateToken, // Auth kontrolünü aktif et
   [param('reviewId').isInt({ min: 1 })],
   async (req: any, res: any) => {
     try {
@@ -1072,7 +1081,7 @@ router.delete('/user/:reviewId',
       }
 
       const { reviewId } = req.params;
-      const userId = 1; // Geçici olarak sabit user ID
+      const userId = req.user.id; // JWT'den gerçek user ID'yi al
 
       // Yorum sahibi kontrolü
       const [reviewCheck] = await db.execute<RowDataPacket[]>(
@@ -1121,10 +1130,10 @@ router.delete('/user/:reviewId',
 
 // Kullanıcının kendi yorumlarını getir
 router.get('/user/my-reviews',
-  // authenticateToken, // Şimdilik auth bypass
+  authenticateToken, // Auth kontrolünü aktif et
   async (req: any, res: any) => {
     try {
-      const userId = 1; // Geçici olarak sabit user ID
+      const userId = (req as any).user.id; // JWT'den gerçek user ID'yi al
 
       // Kullanıcının yorumlarını getir
       const [reviews] = await db.execute<RowDataPacket[]>(`

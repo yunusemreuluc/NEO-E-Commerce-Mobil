@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { API_BASE_URL } from '../../config/api';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://10.241.81.212:4000";
+
 
 interface Order {
   id: number;
@@ -50,6 +51,7 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const [filter, setFilter] = useState({
     status: '',
     page: 1,
@@ -106,6 +108,40 @@ export default function OrdersPage() {
       fetchOrders();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Durum güncellenirken hata oluştu');
+    }
+  };
+
+  const deleteOrder = async (orderId: number, orderNumber: string) => {
+    if (!confirm(`"${orderNumber}" numaralı siparişi silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.`)) {
+      return;
+    }
+
+    setDeletingId(orderId);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/orders/admin/${orderId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        const message = data?.message || 'Sipariş silinemedi';
+        throw new Error(message);
+      }
+
+      alert(data.message || 'Sipariş başarıyla silindi');
+      fetchOrders(); // Listeyi yenile
+
+    } catch (err) {
+      console.error('Sipariş silme hatası:', err);
+      alert(err instanceof Error ? err.message : 'Sipariş silinirken hata oluştu');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -315,6 +351,22 @@ export default function OrdersPage() {
                         className="text-blue-600 hover:text-blue-900 text-xs bg-blue-50 px-2 py-1 rounded"
                       >
                         Detay Gör
+                      </button>
+                      <button
+                        onClick={() => deleteOrder(order.id, order.order_number)}
+                        disabled={deletingId === order.id}
+                        className="text-red-600 hover:text-red-900 text-xs bg-red-50 px-2 py-1 rounded disabled:opacity-50 flex items-center gap-1"
+                      >
+                        {deletingId === order.id ? (
+                          <>
+                            <div className="w-3 h-3 border border-red-500 border-t-transparent rounded-full animate-spin"></div>
+                            Siliniyor...
+                          </>
+                        ) : (
+                          <>
+                            🗑️ Sil
+                          </>
+                        )}
                       </button>
                     </div>
                   </td>

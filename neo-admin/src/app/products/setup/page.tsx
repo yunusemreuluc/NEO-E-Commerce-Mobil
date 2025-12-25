@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import { API_BASE_URL } from '../../../config/api';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://10.241.81.212:4000";
+
 
 export default function ProductSetupPage() {
   const [loading, setLoading] = useState(false);

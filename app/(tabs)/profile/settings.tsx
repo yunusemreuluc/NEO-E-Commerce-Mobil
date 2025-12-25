@@ -15,11 +15,10 @@ import {
     View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useAuth } from "../../../contexts/AuthContext";
+import { API_BASE_URL } from "../../../config/api";
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const { logout } = useAuth();
 
   // Görsel state'ler (aktif değil, sadece UI için)
   const [selectedTheme, setSelectedTheme] = useState("light");
@@ -94,7 +93,7 @@ export default function SettingsScreen() {
 
     try {
       // API çağrısı yapılacak (şimdilik simüle ediyoruz)
-      const response = await fetch('http://10.241.81.212:4000/api/auth/change-password', {
+      const response = await fetch(`${API_BASE_URL}/api/auth/change-password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -145,29 +144,6 @@ export default function SettingsScreen() {
     setShowCurrentPassword(false);
     setShowNewPassword(false);
     setShowConfirmPassword(false);
-  };
-
-  const handleLogout = () => {
-    Alert.alert(
-      "Çıkış Yap",
-      "Hesabınızdan çıkmak istediğinizden emin misiniz?",
-      [
-        { text: "Vazgeç", style: "cancel" },
-        { 
-          text: "Çıkış Yap", 
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await logout();
-              // Login sayfasına yönlendir
-              router.replace("/(auth)/login");
-            } catch (error) {
-              Alert.alert("Hata", "Çıkış yapılırken bir hata oluştu.");
-            }
-          }
-        },
-      ]
-    );
   };
 
   const handleDeleteAccount = () => {
@@ -324,16 +300,6 @@ export default function SettingsScreen() {
           <Text style={styles.sectionTitle}>Hesap İşlemleri</Text>
           
           <View style={styles.settingGroup}>
-            <TouchableOpacity 
-              style={styles.dangerRow}
-              onPress={handleLogout}
-            >
-              <View style={styles.actionLeft}>
-                <Ionicons name="log-out-outline" size={20} color="#EF4444" />
-                <Text style={styles.dangerText}>Çıkış Yap</Text>
-              </View>
-            </TouchableOpacity>
-
             <TouchableOpacity 
               style={styles.dangerRow}
               onPress={handleDeleteAccount}

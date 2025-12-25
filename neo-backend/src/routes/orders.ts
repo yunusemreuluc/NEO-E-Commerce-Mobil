@@ -1,13 +1,22 @@
 // neo-backend/src/routes/orders.ts
-import express from 'express';
+import express, { Request } from 'express';
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
+import { API_BASE_URL } from '../config/api';
 import { db } from '../db';
 import { authenticateToken } from '../middleware/auth';
+
+interface AuthRequest extends Request {
+  user?: {
+    id: number;
+    email: string;
+    role: string;
+  };
+}
 
 const router = express.Router();
 
 // Sipariş oluşturma
-router.post('/', authenticateToken, async (req, res) => {
+router.post('/', authenticateToken, async (req: AuthRequest, res) => {
   const userId = req.user?.id;
   const {
     shipping_address_id,
@@ -18,7 +27,12 @@ router.post('/', authenticateToken, async (req, res) => {
     discount_amount = 0
   } = req.body;
 
+  console.log('🏪 Backend: Sipariş oluşturma isteği geldi');
+  console.log('👤 User ID:', userId);
+  console.log('📦 Request body:', req.body);
+
   if (!userId || !items || !Array.isArray(items) || items.length === 0) {
+    console.error('❌ Geçersiz sipariş bilgileri');
     return res.status(400).json({ 
       success: false, 
       message: 'Geçersiz sipariş bilgileri' 
@@ -129,6 +143,11 @@ router.post('/', authenticateToken, async (req, res) => {
 
     await connection.commit();
 
+    console.log('✅ Sipariş başarıyla oluşturuldu');
+    console.log('📋 Order ID:', orderId);
+    console.log('🔢 Order Number:', orderNumber);
+    console.log('💰 Total Amount:', totalAmount);
+
     res.json({
       success: true,
       message: 'Sipariş başarıyla oluşturuldu',
@@ -142,7 +161,7 @@ router.post('/', authenticateToken, async (req, res) => {
 
   } catch (error) {
     await connection.rollback();
-    console.error('Sipariş oluşturma hatası:', error);
+    console.error('💥 Sipariş oluşturma hatası:', error);
     res.status(500).json({
       success: false,
       message: 'Sipariş oluşturulurken bir hata oluştu'
@@ -153,7 +172,7 @@ router.post('/', authenticateToken, async (req, res) => {
 });
 
 // Kullanıcının siparişlerini listele
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', authenticateToken, async (req: AuthRequest, res) => {
   const userId = req.user?.id;
   const page = parseInt(req.query.page as string) || 1;
   const limit = parseInt(req.query.limit as string) || 10;
@@ -225,7 +244,7 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 // Sipariş detayı
-router.get('/:id', authenticateToken, async (req, res) => {
+router.get('/:id', authenticateToken, async (req: AuthRequest, res) => {
   const userId = req.user?.id;
   const orderId = req.params.id;
 
@@ -245,10 +264,32 @@ router.get('/:id', authenticateToken, async (req, res) => {
 
     const order = orderResult[0];
 
-    // Sipariş kalemleri
+    // Sipariş kalemleri - ürün bilgileriyle birlikte
     const [items] = await db.execute(
-      'SELECT * FROM order_items WHERE order_id = ?',
-      [orderId]
+      `SELECT oi.*, p.name as product_name,
+       COALESCE(
+         CASE 
+           WHEN pi.image_url IS NOT NULL AND pi.image_url != '' 
+           THEN CASE 
+             WHEN pi.image_url LIKE 'http%' THEN pi.image_url
+             ELSE CONCAT(?, pi.image_url)
+           END
+           ELSE NULL 
+         END,
+         CASE 
+           WHEN p.image_url IS NOT NULL AND p.image_url != '' 
+           THEN CASE 
+             WHEN p.image_url LIKE 'http%' THEN p.image_url
+             ELSE CONCAT(?, p.image_url)
+           END
+           ELSE NULL 
+         END
+       ) as product_image
+       FROM order_items oi
+       LEFT JOIN products p ON oi.product_id = p.id
+       LEFT JOIN product_images pi ON p.id = pi.product_id AND pi.is_primary = TRUE
+       WHERE oi.order_id = ?`,
+      [API_BASE_URL, API_BASE_URL, orderId]
     ) as [RowDataPacket[], any];
 
     // Ödeme bilgisi
@@ -286,7 +327,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
 });
 
 // Sipariş iptal etme
-router.patch('/:id/cancel', authenticateToken, async (req, res) => {
+router.patch('/:id/cancel', authenticateToken, async (req: AuthRequest, res) => {
   const userId = req.user?.id;
   const orderId = req.params.id;
 
@@ -542,6 +583,80 @@ router.post('/admin/update-images', authenticateToken, async (req, res) => {
       success: false,
       message: 'Sipariş resimleri güncellenirken bir hata oluştu'
     });
+  }
+});
+
+// Admin: Sipariş sil (gerçek silme)
+router.delete('/admin/:id', authenticateToken, async (req: AuthRequest, res) => {
+  const orderId = req.params.id;
+
+  if (!orderId || isNaN(Number(orderId))) {
+    return res.status(400).json({
+      success: false,
+      message: 'Geçerli bir sipariş ID gerekli'
+    });
+  }
+
+  const connection = await db.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    // Önce siparişin var olup olmadığını kontrol et
+    const [orderCheck] = await connection.execute(
+      'SELECT id, order_number, user_id FROM orders WHERE id = ?',
+      [orderId]
+    ) as [RowDataPacket[], any];
+
+    if (orderCheck.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({
+        success: false,
+        message: 'Sipariş bulunamadı'
+      });
+    }
+
+    const orderNumber = orderCheck[0].order_number;
+
+    // İlişkili tabloları temizle
+    await connection.execute('DELETE FROM order_status_history WHERE order_id = ?', [orderId]);
+    await connection.execute('DELETE FROM order_payments WHERE order_id = ?', [orderId]);
+    await connection.execute('DELETE FROM order_items WHERE order_id = ?', [orderId]);
+    
+    // Ana siparişi sil
+    const [deleteResult] = await connection.execute(
+      'DELETE FROM orders WHERE id = ?',
+      [orderId]
+    ) as [ResultSetHeader, any];
+
+    if (deleteResult.affectedRows === 0) {
+      await connection.rollback();
+      return res.status(404).json({
+        success: false,
+        message: 'Sipariş silinemedi'
+      });
+    }
+
+    await connection.commit();
+
+    res.json({
+      success: true,
+      message: `Sipariş "${orderNumber}" başarıyla silindi`,
+      data: {
+        deleted_order_id: orderId,
+        deleted_order_number: orderNumber
+      }
+    });
+
+  } catch (error) {
+    await connection.rollback();
+    console.error('Sipariş silme hatası:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Sipariş silinirken bir hata oluştu'
+    });
+  } finally {
+    connection.release();
   }
 });
 

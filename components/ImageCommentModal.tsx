@@ -17,6 +17,7 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
+import { API_BASE_URL } from '../config/api';
 
 interface ImageCommentModalProps {
   visible: boolean;
@@ -407,7 +408,7 @@ export default function ImageCommentModal({
                   // URL'yi tam hale getir
                   const fullUrl = imageUrl.startsWith('http') 
                     ? imageUrl 
-                    : `http://10.241.81.212:4000${imageUrl}`;
+                    : `${API_BASE_URL}${imageUrl}`;
                   
                   return (
                     <View key={`existing-${index}`} style={styles.imageWrapper}>

@@ -22,8 +22,9 @@ import { useCart } from "../../../contexts/CartContext";
 import { useFavorites } from "../../../contexts/FavoritesContext";
 import type { Product } from "../../../types/Product";
 
+import { API_BASE_URL } from '../../../config/api';
+
 // API base URL'i import et
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || "http://10.241.81.212:4000";
 
 export default function ProductScreen() {
   const params = useLocalSearchParams<{

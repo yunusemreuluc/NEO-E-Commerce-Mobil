@@ -1,10 +1,12 @@
 // test-postal-code.js
 const fetch = require('node-fetch');
 
+const { API_BASE_URL } = require('./config/test-config');
+
 async function testPostalCode() {
   try {
     // Giriş yap
-    const loginResponse = await fetch('http://10.241.81.212:4000/auth/login', {
+    const loginResponse = await fetch(`${API_BASE_URL}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -30,7 +32,7 @@ async function testPostalCode() {
       is_default: false
     };
 
-    const addResponse = await fetch('http://10.241.81.212:4000/addresses', {
+    const addResponse = await fetch(`${API_BASE_URL}/addresses`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -49,7 +51,7 @@ async function testPostalCode() {
     }
 
     // Adresleri listele
-    const listResponse = await fetch('http://10.241.81.212:4000/addresses', {
+    const listResponse = await fetch(`${API_BASE_URL}/addresses`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',

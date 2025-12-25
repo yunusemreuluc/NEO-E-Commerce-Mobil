@@ -1,5 +1,6 @@
 // test-direct-address.js
 const fetch = require('node-fetch');
+const { API_BASE_URL } = require('./config/test-config');
 
 async function testDirectAddress() {
   const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjIsImVtYWlsIjoiZGVtb0BuZW9hcHAuY29tIiwicm9sZSI6InVzZXIiLCJpYXQiOjE3NjY0NDEwOTIsImV4cCI6MTc2NzA0NTg5Mn0.fGOQ8Xo-KurMSJLbLF-0VDKJR36QRSUcwCyUaQ6nlqM';
@@ -7,7 +8,7 @@ async function testDirectAddress() {
   try {
     console.log('🧪 Direkt adres endpoint testi...');
     
-    const response = await fetch('http://10.241.81.212:4000/addresses', {
+    const response = await fetch(`${API_BASE_URL}/addresses`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',

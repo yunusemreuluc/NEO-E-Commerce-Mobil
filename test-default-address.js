@@ -1,5 +1,5 @@
 // test-default-address.js
-const API_BASE_URL = 'http://10.241.81.212:4000';
+const { API_BASE_URL } = require('./config/test-config');
 
 async function testDefaultAddress() {
   console.log('🧪 Varsayılan Adres Testi Başlıyor...\n');

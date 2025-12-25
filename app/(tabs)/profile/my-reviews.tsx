@@ -1,6 +1,7 @@
 // app/(tabs)/profile/my-reviews.tsx
 
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
@@ -14,6 +15,8 @@ import {
     View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { API_BASE_URL } from "../../../config/api";
+import { useAuth } from "../../../contexts/AuthContext";
 
 type UserReview = {
   id: number;
@@ -32,6 +35,7 @@ type UserReview = {
 
 export default function MyReviewsScreen() {
   const router = useRouter();
+  const { user } = useAuth();
 
   const [userReviews, setUserReviews] = useState<UserReview[]>([]);
   const [loading, setLoading] = useState(false);
@@ -40,6 +44,11 @@ export default function MyReviewsScreen() {
 
   // Kullanıcının yorumlarını getir
   const fetchUserReviews = async (isRefresh = false) => {
+    if (!user) {
+      setError('Giriş yapmanız gerekiyor');
+      return;
+    }
+
     try {
       if (isRefresh) {
         setRefreshing(true);
@@ -48,9 +57,26 @@ export default function MyReviewsScreen() {
       }
       setError(null);
 
-      const response = await fetch('http://10.241.81.212:4000/comments/user/my-reviews');
+      const token = await AsyncStorage.getItem('auth_token');
+      
+      if (!token) {
+        throw new Error('Giriş yapmanız gerekiyor');
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/comments/user/my-reviews`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
       
       if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error('Oturum süresi dolmuş, lütfen tekrar giriş yapın');
+        }
+        if (response.status === 403) {
+          throw new Error('Bu işlem için yetkiniz yok');
+        }
         throw new Error('Yorumlar getirilemedi');
       }
 
@@ -70,8 +96,10 @@ export default function MyReviewsScreen() {
   };
 
   useEffect(() => {
-    fetchUserReviews();
-  }, []);
+    if (user) {
+      fetchUserReviews();
+    }
+  }, [user]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -210,6 +238,37 @@ export default function MyReviewsScreen() {
       </TouchableOpacity>
     </View>
   );
+
+  if (!user) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
+            <Ionicons name="arrow-back" size={24} color="#111" />
+          </TouchableOpacity>
+          <Text style={styles.title}>Yorumlarım</Text>
+          <View style={styles.placeholder} />
+        </View>
+        
+        <View style={styles.emptyContainer}>
+          <Ionicons name="person-outline" size={64} color="#9CA3AF" />
+          <Text style={styles.emptyTitle}>Giriş Yapın</Text>
+          <Text style={styles.emptySubtitle}>
+            Yorumlarınızı görmek için giriş yapmanız gerekiyor
+          </Text>
+          <TouchableOpacity
+            style={styles.emptyButton}
+            onPress={() => router.push('/(auth)/login')}
+          >
+            <Text style={styles.emptyButtonText}>Giriş Yap</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (loading) {
     return (

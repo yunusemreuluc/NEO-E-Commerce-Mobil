@@ -1,7 +1,8 @@
 'use client';
 
-import SimpleCommentModeration from '@/components/SimpleCommentModeration';
 import { useEffect, useState } from 'react';
+import SimpleCommentModeration from '../../components/SimpleCommentModeration';
+import { API_BASE_URL } from '../../config/api';
 
 export default function ReviewsPage() {
   const [authToken, setAuthToken] = useState<string>('');
@@ -23,7 +24,7 @@ export default function ReviewsPage() {
 
   return (
     <SimpleCommentModeration 
-      apiBaseUrl="http://10.241.81.212:4000"
+      apiBaseUrl={API_BASE_URL}
       authToken={authToken}
     />
   );

@@ -1,21 +1,21 @@
 // app/(tabs)/home/index.tsx
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    Animated,
-    FlatList,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Animated,
+  FlatList,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from "react-native";
 
+import { ApiProduct, Product } from "@/types/Product";
 import { getCategories } from "../../../api";
 import ProductCard from "../../../components/ProductCard";
 import { useCart } from "../../../contexts/CartContext";
@@ -23,7 +23,6 @@ import { useNotifications } from "../../../contexts/NotificationContext";
 import { useToast } from "../../../contexts/ToastContext";
 import { useAppDispatch, useAppSelector } from "../../../store/hooks";
 import { fetchProducts } from "../../../store/slices/productsSlice";
-import type { ApiProduct, Product } from "../../../types/Product";
 
 // Kategori tipi
 interface Category {
@@ -34,38 +33,105 @@ interface Category {
   image_url?: string;
   is_active: boolean;
   sort_order: number;
+  parent_id?: number;
   product_count?: number;
 }
 
-// Sabit kategoriler (fallback için)
-const DEFAULT_CATEGORIES = [
-  { label: "Tümü", value: "Tümü", icon: "grid-outline" as const },
-  { label: "Elektronik", value: "Elektronik", icon: "tv-outline" as const },
-  { label: "Moda", value: "Moda", icon: "shirt-outline" as const },
-  { label: "Ev", value: "Ev", icon: "home-outline" as const },
-  { label: "Spor", value: "Spor", icon: "barbell-outline" as const },
-  { label: "Ofis", value: "Ofis", icon: "briefcase-outline" as const },
-];
-
-// İkon eşleştirme fonksiyonu
+// Kategori adına göre otomatik icon belirleme
 const getCategoryIcon = (categoryName: string): keyof typeof Ionicons.glyphMap => {
   const name = categoryName.toLowerCase();
   
-  if (name.includes('elektronik') || name.includes('teknoloji')) return 'tv-outline';
-  if (name.includes('moda') || name.includes('giyim') || name.includes('kıyafet')) return 'shirt-outline';
-  if (name.includes('ev') || name.includes('yaşam') || name.includes('dekor')) return 'home-outline';
-  if (name.includes('spor') || name.includes('fitness') || name.includes('sağlık')) return 'barbell-outline';
-  if (name.includes('ofis') || name.includes('iş') || name.includes('büro')) return 'briefcase-outline';
-  if (name.includes('kitap') || name.includes('eğitim')) return 'book-outline';
-  if (name.includes('oyuncak') || name.includes('çocuk')) return 'game-controller-outline';
-  if (name.includes('kozmetik') || name.includes('güzellik')) return 'flower-outline';
-  if (name.includes('mutfak') || name.includes('yemek')) return 'restaurant-outline';
-  if (name.includes('bahçe') || name.includes('bitki')) return 'leaf-outline';
+  // Elektronik kategorileri
+  if (name.includes('elektronik') || name.includes('teknoloji') || name.includes('bilgisayar')) {
+    return 'tv-outline';
+  }
+  if (name.includes('telefon') || name.includes('mobil')) {
+    return 'phone-portrait-outline';
+  }
   
-  return 'pricetag-outline'; // Varsayılan ikon
+  // Giyim kategorileri
+  if (name.includes('giyim') || name.includes('kıyafet') || name.includes('tekstil')) {
+    return 'shirt-outline';
+  }
+  if (name.includes('ayakkabı') || name.includes('bot') || name.includes('sandalet')) {
+    return 'footsteps-outline';
+  }
+  
+  // Ev & Yaşam kategorileri
+  if (name.includes('ev') || name.includes('yaşam') || name.includes('mobilya')) {
+    return 'home-outline';
+  }
+  if (name.includes('mutfak') || name.includes('yemek')) {
+    return 'restaurant-outline';
+  }
+  
+  // Spor kategorileri
+  if (name.includes('spor') || name.includes('fitness') || name.includes('egzersiz')) {
+    return 'fitness-outline';
+  }
+  
+  // Kozmetik & Sağlık kategorileri
+  if (name.includes('kozmetik') || name.includes('güzellik') || name.includes('bakım')) {
+    return 'flower-outline';
+  }
+  if (name.includes('sağlık') || name.includes('ilaç') || name.includes('vitamin')) {
+    return 'medical-outline';
+  }
+  
+  // Kitap & Eğitim kategorileri
+  if (name.includes('kitap') || name.includes('eğitim') || name.includes('ders')) {
+    return 'book-outline';
+  }
+  
+  // Oyuncak & Çocuk kategorileri
+  if (name.includes('oyuncak') || name.includes('çocuk') || name.includes('bebek')) {
+    return 'happy-outline';
+  }
+  
+  // Otomotiv kategorileri
+  if (name.includes('otomotiv') || name.includes('araba') || name.includes('motor')) {
+    return 'car-outline';
+  }
+  
+  // Bahçe & Doğa kategorileri
+  if (name.includes('bahçe') || name.includes('bitki') || name.includes('çiçek')) {
+    return 'leaf-outline';
+  }
+  
+  // Müzik & Sanat kategorileri
+  if (name.includes('müzik') || name.includes('enstrüman') || name.includes('sanat')) {
+    return 'musical-notes-outline';
+  }
+  
+  // Yiyecek & İçecek kategorileri
+  if (name.includes('yiyecek') || name.includes('içecek') || name.includes('gıda')) {
+    return 'fast-food-outline';
+  }
+  
+  // Varsayılan icon
+  return 'pricetag-outline';
 };
 
+// Kategori adının uzunluğuna göre dinamik genişlik hesaplama
+const calculateWidth = (text: string): number => {
+  const baseWidth = 80;
+  const charWidth = 8;
+  const padding = 32;
+  const iconWidth = 24;
+  
+  const textWidth = text.length * charWidth;
+  const totalWidth = Math.max(baseWidth, textWidth + padding + iconWidth);
+  
+  return Math.min(totalWidth, 160);
+};
 
+// Kategori adının uzunluğuna göre font boyutu ayarlama
+const getFontSize = (text: string): number => {
+  if (text.length <= 8) return 14;
+  if (text.length <= 12) return 13;
+  if (text.length <= 16) return 12;
+  return 11;
+};
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -85,42 +151,6 @@ export default function HomeScreen() {
   // Dinamik kategoriler
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoriesLoading, setCategoriesLoading] = useState<boolean>(false);
-
-  // Kategori konfigürasyonu - dinamik olarak oluştur
-  const categoryConfig = useMemo(() => {
-    const config = [
-      { label: "Tümü", value: "Tümü", icon: "grid-outline" as const }
-    ];
-
-    // Backend'ten gelen kategorileri ekle
-    categories
-      .filter(cat => cat.is_active && !cat.parent_id) // Sadece aktif ana kategoriler
-      .sort((a, b) => a.sort_order - b.sort_order) // Sıralama
-      .forEach(cat => {
-        config.push({
-          label: cat.name,
-          value: cat.name,
-          icon: getCategoryIcon(cat.name)
-        });
-      });
-
-    return config;
-  }, [categories]);
-
-  // Kategorileri yükle
-  const loadCategories = async () => {
-    try {
-      setCategoriesLoading(true);
-      const categoryList = await getCategories();
-      setCategories(categoryList);
-    } catch (err) {
-      console.error('Kategoriler yüklenirken hata:', err);
-      // Hata durumunda varsayılan kategorileri kullan
-      showToast("Kategoriler yüklenemedi, varsayılan kategoriler kullanılıyor");
-    } finally {
-      setCategoriesLoading(false);
-    }
-  };
 
   // Optimized handlers with useCallback
   const handleSearchChange = useCallback((text: string) => {
@@ -203,6 +233,21 @@ export default function HomeScreen() {
     dispatch(fetchProducts());
   };
 
+  // Kategorileri yükle
+  const loadCategories = async () => {
+    try {
+      setCategoriesLoading(true);
+      const categoryList = await getCategories();
+      setCategories(categoryList);
+    } catch (err) {
+      console.error('Kategoriler yüklenirken hata:', err);
+      // Hata durumunda varsayılan kategorileri kullan
+      showToast("Kategoriler yüklenemedi, varsayılan kategoriler kullanılıyor");
+    } finally {
+      setCategoriesLoading(false);
+    }
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
     // Ürünleri, kategorileri ve bildirimleri yenile
@@ -227,25 +272,52 @@ export default function HomeScreen() {
     }
   }, [products.length, loading]);
 
- const mapToCardProduct = (item: ApiProduct): Product => {
-  const priceNumber =
-    typeof item.price === "string" ? Number(item.price) : item.price;
+  const mapToCardProduct = (item: ApiProduct): Product => {
+    const priceNumber =
+      typeof item.price === "string" ? Number(item.price) : item.price;
 
-  const oldPriceNumber =
-    (item as any).old_price != null
-      ? Number((item as any).old_price)
-      : undefined;
+    // İndirim hesaplama - birden fazla kaynak kontrol et
+    let oldPriceNumber: number | undefined;
+    
+    // 1. Direkt old_price varsa kullan
+    if ((item as any).old_price != null && Number((item as any).old_price) > 0) {
+      oldPriceNumber = Number((item as any).old_price);
+    }
+    // 2. discount_percentage varsa hesapla
+    else if (item.discount_percentage && Number(item.discount_percentage) > 0) {
+      const discountPercent = Number(item.discount_percentage);
+      // Mevcut fiyat indirimli fiyat, eski fiyatı hesapla
+      oldPriceNumber = priceNumber / (1 - discountPercent / 100);
+    }
+    // 3. sale_price varsa, price eski fiyat, sale_price yeni fiyat
+    else if ((item as any).sale_price != null && Number((item as any).sale_price) > 0) {
+      oldPriceNumber = priceNumber;
+      // sale_price'ı yeni fiyat olarak kullan
+      const salePriceNumber = Number((item as any).sale_price);
+      if (salePriceNumber < priceNumber) {
+        // Bu durumda price eski fiyat, sale_price yeni fiyat
+        return {
+          id: item.id,
+          name: item.name,
+          price: salePriceNumber,
+          oldPrice: priceNumber,
+          image: item.image_url ?? "https://via.placeholder.com/600x400.png?text=NEO",
+          category: item.category ?? "Genel",
+          description: item.short_description || item.description,
+        };
+      }
+    }
 
-  return {
-    id: item.id,
-    name: item.name,
-    price: priceNumber ?? 0,
-    oldPrice: oldPriceNumber && oldPriceNumber > (priceNumber ?? 0) ? oldPriceNumber : undefined,
-    image: item.image_url ?? "https://via.placeholder.com/600x400.png?text=NEO",
-    category: item.category,
+    return {
+      id: item.id,
+      name: item.name,
+      price: priceNumber ?? 0,
+      oldPrice: oldPriceNumber && oldPriceNumber > (priceNumber ?? 0) ? oldPriceNumber : undefined,
+      image: item.image_url ?? "https://via.placeholder.com/600x400.png?text=NEO",
+      category: item.category ?? "Genel",
+      description: item.short_description || item.description,
+    };
   };
-};
-
 
   // En iyi fırsatlar: seçili kategoride indirim yüzdesi en yüksek ilk 3
   const bestDeals: Product[] = useMemo(() => {
@@ -273,7 +345,7 @@ export default function HomeScreen() {
     return withDiscount.slice(0, 3);
   }, [products, selectedCategory]);
 
-  // bestDeals değişince slider’ı resetle + interval kur
+  // bestDeals değişince slider'ı resetle + interval kur
   useEffect(() => {
     if (bestDeals.length === 0) {
       setDealIndex(0);
@@ -399,66 +471,111 @@ export default function HomeScreen() {
         )}
       </View>
 
-      {/* KATEGORİLER */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.categoriesScrollContent}
-      >
-        {categoryConfig.map((cat) => {
-          const isActive = cat.value === selectedCategory;
-          const ChipWrapper = isActive ? Animated.View : View;
+      {/* KATEGORİLER - Yeni Dinamik Sistem */}
+      <View style={styles.categoriesContainer}>
+        <Text style={styles.categoriesTitle}>Kategoriler</Text>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoriesScrollContent}
+        >
+          {/* Tümü kategorisi */}
+          <TouchableOpacity
+            style={[
+              styles.dynamicCategoryCard,
+              { width: calculateWidth('Tümü') },
+              selectedCategory === 'Tümü' && styles.selectedCategoryCard
+            ]}
+            onPress={() => setSelectedCategory('Tümü')}
+            activeOpacity={0.7}
+          >
+            <View style={[
+              styles.categoryIconContainer, 
+              selectedCategory === 'Tümü' && styles.selectedIconContainer
+            ]}>
+              <Ionicons 
+                name="grid-outline" 
+                size={20} 
+                color={selectedCategory === 'Tümü' ? '#FFFFFF' : '#666666'} 
+              />
+            </View>
+            <Text style={[
+              styles.dynamicCategoryText,
+              { fontSize: getFontSize('Tümü') },
+              selectedCategory === 'Tümü' && styles.selectedCategoryText
+            ]}>
+              Tümü
+            </Text>
+            <Text style={[
+              styles.productCountText,
+              selectedCategory === 'Tümü' && styles.selectedProductCountText
+            ]}>
+              {categories.reduce((sum, cat) => sum + (cat.product_count || 0), 0)} ürün
+            </Text>
+          </TouchableOpacity>
 
-          return (
-            <TouchableOpacity
-              key={cat.value}
-              activeOpacity={0.9}
-              onPress={() => setSelectedCategory(cat.value)}
-            >
-              <ChipWrapper
-                style={[
-                  styles.categoryChipWrapper,
-                  isActive && { transform: [{ scale: activeScale }] },
-                ]}
-              >
-                {isActive ? (
-                  <LinearGradient
-                    colors={["#FF3B30", "#FF6B4A"]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.categoryChip}
+          {/* Dinamik kategoriler */}
+          {categoriesLoading ? (
+            // Loading skeleton
+            [1, 2, 3, 4].map((item) => (
+              <View key={item} style={styles.categoryLoadingSkeleton} />
+            ))
+          ) : (
+            categories
+              .filter(cat => cat.is_active)
+              .sort((a, b) => a.sort_order - b.sort_order)
+              .map((category) => {
+                const icon = getCategoryIcon(category.name);
+                const cardWidth = calculateWidth(category.name);
+                const fontSize = getFontSize(category.name);
+                const isSelected = selectedCategory === category.name;
+                
+                return (
+                  <TouchableOpacity
+                    key={category.id}
+                    style={[
+                      styles.dynamicCategoryCard,
+                      { width: cardWidth },
+                      isSelected && styles.selectedCategoryCard
+                    ]}
+                    onPress={() => setSelectedCategory(category.name)}
+                    activeOpacity={0.7}
                   >
-                    <Ionicons
-                      name={cat.icon}
-                      size={16}
-                      color="#fff"
-                      style={{ marginRight: 6 }}
-                    />
-                    <Text style={styles.categoryTextActive}>{cat.label}</Text>
-                  </LinearGradient>
-                ) : (
-                  <View style={[styles.categoryChip, styles.categoryChipInactive]}>
-                    <Ionicons
-                      name={cat.icon}
-                      size={16}
-                      color="#4B5563"
-                      style={{ marginRight: 6 }}
-                    />
-                    <Text style={styles.categoryText}>{cat.label}</Text>
-                  </View>
-                )}
-              </ChipWrapper>
-            </TouchableOpacity>
-          );
-        })}
-        
-        {/* Kategori yükleniyor göstergesi */}
-        {categoriesLoading && (
-          <View style={styles.categoryLoadingWrapper}>
-            <ActivityIndicator size="small" color="#FF3B30" />
-          </View>
-        )}
-      </ScrollView>
+                    <View style={[
+                      styles.categoryIconContainer,
+                      isSelected && styles.selectedIconContainer
+                    ]}>
+                      <Ionicons 
+                        name={icon} 
+                        size={20} 
+                        color={isSelected ? '#FFFFFF' : '#666666'} 
+                      />
+                    </View>
+                    <Text 
+                      style={[
+                        styles.dynamicCategoryText,
+                        { fontSize },
+                        isSelected && styles.selectedCategoryText
+                      ]}
+                      numberOfLines={2}
+                      adjustsFontSizeToFit
+                    >
+                      {category.name}
+                    </Text>
+                    {category.product_count !== undefined && category.product_count > 0 && (
+                      <Text style={[
+                        styles.productCountText,
+                        isSelected && styles.selectedProductCountText
+                      ]}>
+                        {category.product_count} ürün
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                );
+              })
+          )}
+        </ScrollView>
+      </View>
 
       {/* EN İYİ FIRSATLAR */}
       {bestDeals.length > 0 && (
@@ -499,7 +616,7 @@ export default function HomeScreen() {
         </View>
       )}
     </>
-  ), [search, searchFocused, selectedCategory, activeScale, bestDeals, dealIndex, handleSearchChange, handleSearchFocus, handleSearchBlur, handleClearSearch]);
+  ), [search, searchFocused, selectedCategory, activeScale, bestDeals, dealIndex, categories, categoriesLoading, unreadCount]);
 
   return (
     <View style={styles.container}>
@@ -551,7 +668,6 @@ export default function HomeScreen() {
     </View>
   );
 }
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -655,41 +771,79 @@ const styles = StyleSheet.create({
   },
 
   /* CATEGORIES */
+  categoriesContainer: {
+    marginVertical: 16,
+  },
+  categoriesTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#333333',
+    marginBottom: 12,
+    marginHorizontal: 16,
+  },
   categoriesScrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 6,
-    paddingBottom: 8,
-    gap: 8,
   },
-  categoryChipWrapper: {
-    marginRight: 8,
+  dynamicCategoryCard: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    padding: 12,
+    marginRight: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#E9ECEF',
+    minHeight: 80,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  categoryChip: {
-    width: 95,
-    height: 40,
-    borderRadius: 20,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
+  selectedCategoryCard: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+    shadowColor: '#007AFF',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
-  categoryChipInactive: {
-    backgroundColor: "#E5E7EB",
+  categoryIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#E9ECEF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
   },
-  categoryText: {
-    fontSize: 13,
-    color: "#374151",
+  selectedIconContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
   },
-  categoryTextActive: {
-    fontSize: 13,
-    color: "#fff",
-    fontWeight: "700",
+  dynamicCategoryText: {
+    fontWeight: '600',
+    color: '#333333',
+    textAlign: 'center',
+    lineHeight: 16,
   },
-  categoryLoadingWrapper: {
-    width: 40,
-    height: 40,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 8,
+  selectedCategoryText: {
+    color: '#FFFFFF',
+  },
+  productCountText: {
+    fontSize: 10,
+    color: '#666666',
+    marginTop: 2,
+    fontWeight: '400',
+  },
+  selectedProductCountText: {
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
+  categoryLoadingSkeleton: {
+    width: 100,
+    height: 80,
+    backgroundColor: '#E9ECEF',
+    borderRadius: 12,
+    marginRight: 12,
   },
 
   /* BEST DEALS */
@@ -776,8 +930,5 @@ const styles = StyleSheet.create({
   retryText: {
     color: "#fff",
     fontWeight: "600",
-  },
-  emptyText: {
-    color: "#6B7280",
   },
 });

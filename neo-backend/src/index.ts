@@ -67,15 +67,15 @@ app.get("/", (_req, res) => {
   res.json({ message: "NEO Backend API çalışıyor" });
 });
 
-app.use("/addresses", addressesRouter);
-app.use("/auth", authRouter);
-app.use("/orders", ordersRouter);
-app.use("/payment-methods", paymentMethodsRouter);
-app.use("/products", productsRouter);
-app.use("/reviews", reviewsRouter);
-app.use("/comments", commentsRouter); // Gelişmiş yorum sistemi
-app.use("/notifications", notificationsRouter); // Bildirim sistemi
-app.use("/users", usersRouter);
+app.use("/api/addresses", addressesRouter);
+app.use("/api/auth", authRouter);
+app.use("/api/orders", ordersRouter);
+app.use("/api/payment-methods", paymentMethodsRouter);
+app.use("/api/products", productsRouter);
+app.use("/api/reviews", reviewsRouter);
+app.use("/api/comments", commentsRouter); // Gelişmiş yorum sistemi
+app.use("/api/notifications", notificationsRouter); // Bildirim sistemi
+app.use("/api/users", usersRouter);
 
 app.listen(port, "0.0.0.0", () => {
   console.log(`NEO backend ${PUBLIC_BASE_URL} üzerinde çalışıyor`);

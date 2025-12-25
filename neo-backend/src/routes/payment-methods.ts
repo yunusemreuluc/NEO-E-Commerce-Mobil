@@ -1,13 +1,21 @@
 // neo-backend/src/routes/payment-methods.ts
-import express from 'express';
+import express, { Request } from 'express';
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { db } from '../db';
 import { authenticateToken } from '../middleware/auth';
 
+interface AuthRequest extends Request {
+  user?: {
+    id: number;
+    email: string;
+    role: string;
+  };
+}
+
 const router = express.Router();
 
 // Kullanıcının ödeme yöntemlerini listele
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', authenticateToken, async (req: AuthRequest, res) => {
   const userId = req.user?.id;
 
   try {
@@ -35,7 +43,7 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 // Yeni ödeme yöntemi ekle (demo)
-router.post('/', authenticateToken, async (req, res) => {
+router.post('/', authenticateToken, async (req: AuthRequest, res) => {
   const userId = req.user?.id;
   const {
     card_holder_name,
@@ -133,7 +141,7 @@ router.post('/', authenticateToken, async (req, res) => {
 });
 
 // Ödeme yöntemini varsayılan yap
-router.patch('/:id/set-default', authenticateToken, async (req, res) => {
+router.patch('/:id/set-default', authenticateToken, async (req: AuthRequest, res) => {
   const userId = req.user?.id;
   const paymentMethodId = req.params.id;
 
@@ -178,7 +186,7 @@ router.patch('/:id/set-default', authenticateToken, async (req, res) => {
 });
 
 // Ödeme yöntemini sil
-router.delete('/:id', authenticateToken, async (req, res) => {
+router.delete('/:id', authenticateToken, async (req: AuthRequest, res) => {
   const userId = req.user?.id;
   const paymentMethodId = req.params.id;
 

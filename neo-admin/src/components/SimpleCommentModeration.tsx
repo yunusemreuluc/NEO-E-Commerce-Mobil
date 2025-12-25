@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { API_BASE_URL } from '../config/api';
 
 interface Comment {
   id: number;
@@ -132,7 +133,7 @@ export default function SimpleCommentModeration({
   // Yorum silme fonksiyonu
   const deleteComment = async (commentId: number, reason?: string) => {
     try {
-      const response = await fetch(`http://10.241.81.212:4000/comments/admin/${commentId}`, {
+      const response = await fetch(`${API_BASE_URL}/comments/admin/${commentId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${authToken}`,
@@ -214,7 +215,7 @@ export default function SimpleCommentModeration({
               <div className="mt-3 text-sm text-red-600">
                 <p><strong>Kontrol edilecekler:</strong></p>
                 <ul className="list-disc list-inside mt-1 space-y-1">
-                  <li>Backend server çalışıyor mu? (http://10.241.81.212:4000)</li>
+                  <li>Backend server çalışıyor mu? ({API_BASE_URL})</li>
                   <li>Admin token geçerli mi? Token: {authToken ? authToken.substring(0, 20) + '...' : 'YOK'}</li>
                   <li>/comments/admin/all endpoint'i mevcut mu?</li>
                   <li>Önce login sayfasından giriş yaptınız mı?</li>

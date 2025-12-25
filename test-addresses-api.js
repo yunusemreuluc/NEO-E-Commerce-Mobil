@@ -1,7 +1,6 @@
 // test-addresses-api.js
 const fetch = require('node-fetch');
-
-const API_BASE_URL = 'http://10.241.81.212:4000';
+const { API_BASE_URL } = require('./config/test-config');
 
 // Test kullanıcısı ile giriş yap
 async function loginTestUser() {

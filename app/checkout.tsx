@@ -3,13 +3,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-    Alert,
-    Modal,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Alert,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -98,10 +98,13 @@ export default function CheckoutScreen() {
         discount_amount: discountAmount,
       };
 
+      console.log('🛒 Sipariş verisi hazırlandı:', orderData);
+      console.log('🔑 Kullanıcı:', user?.name, user?.email);
+
       const result = await createOrder(orderData);
       
-      console.log('Sipariş sonucu:', result);
-      console.log('Total amount:', result?.total_amount, typeof result?.total_amount);
+      console.log('✅ Sipariş sonucu:', result);
+      console.log('💰 Total amount:', result?.total_amount, typeof result?.total_amount);
 
       // Sepeti temizle
       clearCart();
@@ -127,6 +130,7 @@ export default function CheckoutScreen() {
       );
 
     } catch (error) {
+      console.error('❌ Sipariş hatası:', error);
       Alert.alert('Hata', error instanceof Error ? error.message : 'Sipariş oluşturulurken bir hata oluştu');
     } finally {
       setLoading(false);

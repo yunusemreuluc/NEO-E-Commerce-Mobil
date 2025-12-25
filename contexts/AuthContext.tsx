@@ -6,7 +6,7 @@ import React, {
     useEffect,
     useState,
 } from "react";
-import { loginUser, registerUser } from '../api';
+import { API_BASE_URL, loginUser, registerUser } from '../api';
 
 type User = {
   id: number;
@@ -86,9 +86,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const logout = async () => {
     try {
+      // Token ve kullanıcı verilerini temizle
       await AsyncStorage.removeItem('auth_token');
       await AsyncStorage.removeItem('user_data');
+      
+      // Kullanıcı state'ini temizle
       setUser(null);
+      
+      // Diğer context'lerin de temizlenmesi için kısa bir bekleme
+      setTimeout(() => {
+        console.log('Kullanıcı çıkış yaptı, tüm veriler temizlendi');
+      }, 100);
     } catch (error) {
       console.error('Logout error:', error);
     }
@@ -102,11 +110,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return false;
       }
       
-      // Basit token kontrolü - gerçek projede JWT decode edilebilir
-      // Şimdilik token varlığını kontrol ediyoruz
+      // Backend'e token doğrulama isteği gönder
+      const response = await fetch(`${API_BASE_URL}/auth/verify-token`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        // Token geçersizse temizle
+        await logout();
+        return false;
+      }
+      
       return true;
     } catch (error) {
       console.error('Token validity check error:', error);
+      // Hata durumunda güvenli tarafta kal
+      await logout();
       return false;
     }
   };
