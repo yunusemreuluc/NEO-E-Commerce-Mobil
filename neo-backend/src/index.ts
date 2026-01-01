@@ -7,6 +7,7 @@ import multer from "multer";
 import path from "path";
 
 import addressesRouter from "./routes/addresses";
+import aiRouter from "./routes/ai";
 import authRouter from "./routes/auth";
 import commentsRouter from "./routes/comments";
 import notificationsRouter from "./routes/notifications";
@@ -68,6 +69,7 @@ app.get("/", (_req, res) => {
 });
 
 app.use("/api/addresses", addressesRouter);
+app.use("/api/ai", aiRouter);
 app.use("/api/auth", authRouter);
 app.use("/api/orders", ordersRouter);
 app.use("/api/payment-methods", paymentMethodsRouter);

@@ -1,7 +1,7 @@
 // config/api.ts - Merkezi API Konfigürasyonu
 export const API_CONFIG = {
   // Ana IP adresi - sadece burayı değiştir!
-  BASE_IP: '10.241.81.212',
+  BASE_IP: '10.77.252.212',
   PORT: '4000',
   
   // Otomatik URL oluşturma
